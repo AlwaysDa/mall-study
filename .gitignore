@@ -1,0 +1,34 @@
+# ===== WorkBuddy 工具数据与工作记录（含本机路径等私人信息，不上传）=====
+# 如果你希望把学习笔记也一起备份，删掉下面这一行即可
+.workbuddy/
+
+# ===== 临时文件 / 日志 =====
+*.log
+.build.log
+.envcheck*
+.fmtcheck*
+.gitcheck*
+.gitrun*
+.treecheck*
+.mdcheck*
+
+# ===== 压缩包（本地导出的副本，源码已在 mall/ 中）=====
+mall.zip
+*.zip
+
+# ===== IDE =====
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# ===== 构建产物（mall/.gitignore 里也有一份，这里兜底）=====
+target/
+build/
+out/
+
+# ===== 操作系统 =====
+Thumbs.db
+Desktop.ini
+.DS_Store
