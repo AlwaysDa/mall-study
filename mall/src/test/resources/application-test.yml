@@ -1,0 +1,15 @@
+# 测试专用配置：由 @ActiveProfiles("test") 激活
+# 作用：把数据源指向独立的测试库 mall_test，避免测试清库时冲掉开发库 mall 的数据。
+# 前置：先执行 mall/sql/05-测试库初始化.sql 建库建表。
+spring:
+  datasource:
+    url: "jdbc:mysql://localhost:3306/mall_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai"
+    # 与主配置保持一致，密码同样走环境变量，不进代码仓库
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# 需要看测试执行的 SQL 时，取消下面的注释
+# mybatis-plus:
+#   configuration:
+#     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

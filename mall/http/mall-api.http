@@ -1,0 +1,193 @@
+### ============================================================
+### 商城后端接口 · 手工回归脚本（IDEA 内置 HTTP Client）
+### ------------------------------------------------------------
+### 用法：用 IDEA 打开本文件，点击每个请求左侧的绿色箭头逐个执行。
+###      需先启动应用（MallApplication）。
+### 用途：自动化测试跑完后，手工走一遍主链路，直观确认接口行为。
+### 详细用例说明见 docs/11-测试用例清单.md
+### ============================================================
+
+@host = http://localhost:8080
+
+### 下面的 id 请按实际数据填写：
+###   先执行「1 注册」→「2 登录」拿到 merchantId；
+###   再执行「3 新增分类」「4 新增商品」拿 categoryId / productId。
+### 也可以先跑 mall/sql/04-测试数据.sql，用里面的测试店家与商品。
+@merchantId = 1
+@categoryId = 1
+@productId = 1
+@orderId = 1
+
+
+### ------------------------------------------------------------
+### 1. 注册店家（重复执行会返回「账号已存在」，属正常）
+### ------------------------------------------------------------
+POST {{host}}/api/merchants/register
+Content-Type: application/json
+
+{
+  "username": "demo_shop",
+  "password": "123456",
+  "shopName": "演示店铺",
+  "contact": "王老板",
+  "phone": "13900000000"
+}
+
+> {%
+    client.test("注册返回统一结构", function () {
+        client.assert(response.body.hasOwnProperty("code"), "缺少 code 字段");
+        client.assert(response.body.code === 0 || response.body.message === "账号已存在",
+            "预期注册成功或提示账号已存在，实际：" + response.body.message);
+    });
+%}
+
+
+### ------------------------------------------------------------
+### 2. 登录（成功后自动把 merchantId 存入全局变量，供后续请求使用）
+### ------------------------------------------------------------
+POST {{host}}/api/merchants/login
+Content-Type: application/json
+
+{
+  "username": "demo_shop",
+  "password": "123456"
+}
+
+> {%
+    client.test("登录成功且不返回密码", function () {
+        client.assert(response.body.code === 0, "登录失败：" + response.body.message);
+        client.assert(response.body.data.password === undefined, "返回体里不应包含 password");
+    });
+    client.global.set("merchantId", response.body.data.id);
+%}
+
+
+### ------------------------------------------------------------
+### 3. 新增分类
+### ------------------------------------------------------------
+POST {{host}}/api/categories
+Content-Type: application/json
+
+{
+  "name": "演示分类",
+  "sort": 1
+}
+
+> {%
+    client.test("新增分类返回自增 id", function () {
+        client.assert(response.body.code === 0, "新增失败：" + response.body.message);
+        client.assert(response.body.data.id > 0, "未回填 id");
+    });
+    client.global.set("categoryId", response.body.data.id);
+%}
+
+
+### ------------------------------------------------------------
+### 4. 新增商品（新增后可在「5 商品分页」里找到它的 id）
+### ------------------------------------------------------------
+POST {{host}}/api/products
+Content-Type: application/json
+
+{
+  "merchantId": {{merchantId}},
+  "categoryId": {{categoryId}},
+  "name": "演示商品",
+  "description": "用于接口回归测试",
+  "price": 199.00,
+  "stock": 100
+}
+
+> {%
+    client.test("新增商品成功", function () {
+        client.assert(response.body.code === 0, "新增失败：" + response.body.message);
+    });
+%}
+
+
+### ------------------------------------------------------------
+### 5. 商品分页（从返回结果里挑一个 id 填到文件顶部的 @productId）
+### ------------------------------------------------------------
+GET {{host}}/api/products/page?merchantId={{merchantId}}&pageNum=1&pageSize=10
+
+> {%
+    client.test("分页结构完整", function () {
+        client.assert(response.body.code === 0);
+        client.assert(Array.isArray(response.body.data.records), "records 应为数组");
+    });
+%}
+
+
+### ------------------------------------------------------------
+### 6. 商品入库（补库存）
+### ------------------------------------------------------------
+POST {{host}}/api/products/{{productId}}/stock-in?quantity=50
+
+> {%
+    client.test("入库成功", function () {
+        client.assert(response.body.code === 0, "入库失败：" + response.body.message);
+    });
+%}
+
+
+### ------------------------------------------------------------
+### 7. 下单（事务：订单 + 明细 + 扣库存）
+###    把 quantity 改成一个大于库存的数字，可验证「库存不足时全部回滚」
+### ------------------------------------------------------------
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{
+  "merchantId": {{merchantId}},
+  "buyerName": "张三",
+  "buyerPhone": "13800000000",
+  "items": [
+    { "productId": {{productId}}, "quantity": 2 }
+  ]
+}
+
+> {%
+    client.test("下单成功", function () {
+        client.assert(response.body.code === 0, "下单失败：" + response.body.message);
+        client.assert(response.body.data.orderNo.length > 0, "缺少订单号");
+    });
+    client.global.set("orderId", response.body.data.id);
+%}
+
+
+### ------------------------------------------------------------
+### 8. 订单详情（应带出 items 明细）
+###    下单后查看商品，可确认明细里保存的是下单时的快照
+### ------------------------------------------------------------
+GET {{host}}/api/orders/{{orderId}}
+
+> {%
+    client.test("详情带出明细", function () {
+        client.assert(response.body.code === 0);
+        client.assert(response.body.data.items.length >= 1, "缺少订单明细");
+    });
+%}
+
+
+### ------------------------------------------------------------
+### 9. 订单分页
+### ------------------------------------------------------------
+GET {{host}}/api/orders/page?merchantId={{merchantId}}&pageNum=1&pageSize=10
+
+
+### ------------------------------------------------------------
+### 10. 取消订单（应回补库存，状态变为 2）
+###     重复执行本请求，第二次会返回「只有待支付订单才能取消」
+### ------------------------------------------------------------
+PUT {{host}}/api/orders/{{orderId}}/cancel
+
+> {%
+    client.test("取消成功", function () {
+        client.assert(response.body.code === 0, "取消失败：" + response.body.message);
+    });
+%}
+
+
+### ------------------------------------------------------------
+### 11. 路径不存在（应返回 404 + code=404，而不是 500）
+### ------------------------------------------------------------
+GET {{host}}/api/not-exists
