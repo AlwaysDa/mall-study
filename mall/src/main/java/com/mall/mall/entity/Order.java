@@ -31,8 +31,8 @@ public class Order {
     private String buyerName;        // 买家姓名（快照）
     private String buyerPhone;       // 买家电话（快照）
     private BigDecimal totalAmount;  // 订单总额
-    private Integer status;          // 0待支付 1已支付 2已取消
-    private Integer payStatus;       // 0未支付 1已支付
+    private Integer status;          // 订单状态：0待支付 1已支付 2已取消
+    private Integer payStatus;       // 支付状态：0未支付 1支付中 2已支付 3支付失败（阶段七扩展）
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

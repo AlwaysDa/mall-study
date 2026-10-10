@@ -22,8 +22,8 @@ public class OrderVO {
     private String buyerName;
     private String buyerPhone;
     private BigDecimal totalAmount;
-    private Integer status;        // 0待支付 1已支付 2已取消
-    private Integer payStatus;     // 0未支付 1已支付
+    private Integer status;        // 订单状态：0待支付 1已支付 2已取消
+    private Integer payStatus;     // 支付状态：0未支付 1支付中 2已支付 3支付失败
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 

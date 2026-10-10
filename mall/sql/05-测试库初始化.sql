@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS `order` (
     buyer_phone   VARCHAR(20)                           COMMENT '买家电话',
     total_amount  DECIMAL(10,2) NOT NULL                COMMENT '订单总额',
     status        TINYINT       NOT NULL DEFAULT 0      COMMENT '订单状态：0待支付 1已支付 2已取消',
-    pay_status    TINYINT       NOT NULL DEFAULT 0      COMMENT '支付状态：0未支付 1已支付',
+    pay_status    TINYINT       NOT NULL DEFAULT 0      COMMENT '支付状态：0未支付 1支付中 2已支付 3支付失败',
     create_time   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
