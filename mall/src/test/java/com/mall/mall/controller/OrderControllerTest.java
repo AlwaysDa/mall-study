@@ -13,7 +13,6 @@ import org.springframework.http.MediaType;
 import java.math.BigDecimal;
 import java.util.List;
 
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -178,7 +177,7 @@ class OrderControllerTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("O-6 下单明细为空：请求被拒绝，不写库")
+    @DisplayName("O-6 下单明细为空：返回 code=400 + 字段提示，不写库")
     void 下单明细为空() throws Exception {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
 
@@ -187,7 +186,8 @@ class OrderControllerTest extends BaseIntegrationTest {
                         .content("""
                                 {"merchantId":%d,"buyerName":"张三","items":[]}
                                 """.formatted(merchant.getId())))
-                .andExpect(jsonPath("$.code").value(not(0)));
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("订单明细不能为空"));
 
         assertEquals(0L, orderMapper.selectCount(null));
     }
@@ -277,6 +277,25 @@ class OrderControllerTest extends BaseIntegrationTest {
 
         assertEquals(2, orderMapper.selectById(order.getId()).getStatus(), "状态应为已取消");
         assertEquals(50, stockOf(product.getId()), "库存应回补到下单前");
+    }
+
+    @Test
+    @DisplayName("O-15 下单店家不存在：被拦截，不写库、不扣库存")
+    void 下单店家不存在() throws Exception {
+        Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
+        Category category = newCategory("数码电子");
+        Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
+
+        // 商品是真实存在的，但 merchantId 传一个不存在的
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(singleItemBody(999999L, product.getId(), 1)))
+                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.message").value("店家不存在"));
+
+        assertEquals(0L, orderMapper.selectCount(null), "不应留下订单");
+        assertEquals(0L, orderItemMapper.selectCount(null), "不应留下明细");
+        assertEquals(50, stockOf(product.getId()), "库存不应被扣减");
     }
 
     @Test

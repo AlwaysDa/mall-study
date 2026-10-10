@@ -7,7 +7,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -55,27 +54,29 @@ class MerchantControllerTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("M-3 注册缺必填项：请求被拒绝，不写库")
+    @DisplayName("M-3 注册缺必填项：返回 code=400 + 字段提示，不写库")
     void 注册缺必填项() throws Exception {
         mockMvc.perform(post("/api/merchants/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"password":"123456","shopName":"测试店铺"}
                                 """))
-                .andExpect(jsonPath("$.code").value(not(0)));
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("账号不能为空"));
 
         assertEquals(0L, merchantMapper.selectCount(null), "校验失败不应写库");
     }
 
     @Test
-    @DisplayName("M-4 密码过短：请求被拒绝，不写库")
+    @DisplayName("M-4 密码过短：返回 code=400 + 字段提示，不写库")
     void 密码过短() throws Exception {
         mockMvc.perform(post("/api/merchants/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"shop_a","password":"123","shopName":"测试店铺"}
                                 """))
-                .andExpect(jsonPath("$.code").value(not(0)));
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("密码长度需在6-20位之间"));
 
         assertEquals(0L, merchantMapper.selectCount(null));
     }

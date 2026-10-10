@@ -2,6 +2,7 @@ package com.mall.mall.service;
 
 import com.mall.mall.common.BusinessException;
 import com.mall.mall.dto.OrderCreateDTO;
+import com.mall.mall.entity.Merchant;
 import com.mall.mall.entity.OrderItem;
 import com.mall.mall.entity.Product;
 import com.mall.mall.mapper.OrderItemMapper;
@@ -39,6 +40,9 @@ class OrderServiceTest {
     private ProductService productService;
 
     @Mock
+    private MerchantService merchantService;
+
+    @Mock
     private OrderItemMapper orderItemMapper;
 
     @Mock
@@ -46,6 +50,15 @@ class OrderServiceTest {
 
     @InjectMocks
     private OrderService orderService;
+
+    /** 存在的店家，用于让「店家存在」这道校验先通过 */
+    private Merchant merchant(Long id) {
+        Merchant merchant = new Merchant();
+        merchant.setId(id);
+        merchant.setUsername("shop_a");
+        merchant.setShopName("测试店铺");
+        return merchant;
+    }
 
     private OrderCreateDTO dtoWith(Long productId, int quantity) {
         OrderCreateDTO dto = new OrderCreateDTO();
@@ -68,8 +81,22 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("店家不存在：抛业务异常，且不写明细、不扣库存")
+    void 店家不存在时抛异常() {
+        when(merchantService.getById(1L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> orderService.createOrder(dtoWith(1L, 1)));
+        assertTrue(exception.getMessage().contains("店家不存在"));
+
+        verify(orderItemMapper, never()).insert(any(OrderItem.class));
+        verify(productMapper, never()).deductStock(anyLong(), anyInt());
+    }
+
+    @Test
     @DisplayName("商品不存在：抛业务异常，且不写明细、不扣库存")
     void 商品不存在时抛异常() {
+        when(merchantService.getById(1L)).thenReturn(merchant(1L));
         when(productService.getById(999L)).thenReturn(null);
 
         BusinessException exception = assertThrows(BusinessException.class,
@@ -83,6 +110,7 @@ class OrderServiceTest {
     @Test
     @DisplayName("库存不足：抛业务异常，且不执行原子扣减")
     void 库存不足时抛异常() {
+        when(merchantService.getById(1L)).thenReturn(merchant(1L));
         when(productService.getById(1L)).thenReturn(product(1L, "iPhone 15", "4999.00", 1));
 
         BusinessException exception = assertThrows(BusinessException.class,

@@ -2,6 +2,7 @@ package com.mall.mall.support;
 
 import com.mall.mall.entity.Category;
 import com.mall.mall.entity.Merchant;
+import com.mall.mall.entity.Order;
 import com.mall.mall.entity.Product;
 import com.mall.mall.mapper.CategoryMapper;
 import com.mall.mall.mapper.MerchantMapper;
@@ -105,5 +106,30 @@ public abstract class BaseIntegrationTest {
     /** 查商品当前库存，用于断言扣减/回补是否正确 */
     protected int stockOf(Long productId) {
         return productMapper.selectById(productId).getStock();
+    }
+
+    /**
+     * 直接插入一张订单，用于支付等「不关心下单流程」的用例。
+     * orderNo 用纳秒时间戳保证唯一（有 uk_order_no 唯一索引，重复会插不进去）。
+     *
+     * @param status    订单状态：0待支付 1已支付 2已取消
+     * @param payStatus 支付状态：0未支付 1支付中 2已支付 3支付失败
+     */
+    protected Order newOrder(Long merchantId, String totalAmount, int status, int payStatus) {
+        Order order = new Order();
+        order.setOrderNo("ORD" + System.nanoTime());
+        order.setMerchantId(merchantId);
+        order.setBuyerName("张三");
+        order.setBuyerPhone("13800000000");
+        order.setTotalAmount(new BigDecimal(totalAmount));
+        order.setStatus(status);
+        order.setPayStatus(payStatus);
+        orderMapper.insert(order);
+        return order;
+    }
+
+    /** 查订单当前状态，返回 [status, payStatus]，用于支付用例断言 */
+    protected Order reloadOrder(Long orderId) {
+        return orderMapper.selectById(orderId);
     }
 }

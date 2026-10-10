@@ -8,7 +8,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -188,14 +187,14 @@ class ProductControllerTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("P-13 新增商品缺必填项：请求被拒绝")
+    @DisplayName("P-13 新增商品缺必填项：返回 code=400，不写库")
     void 新增商品缺必填项() throws Exception {
         mockMvc.perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"没有店家也没有价格"}
                                 """))
-                .andExpect(jsonPath("$.code").value(not(0)));
+                .andExpect(jsonPath("$.code").value(400));
 
         assertEquals(0L, productMapper.selectCount(null));
     }

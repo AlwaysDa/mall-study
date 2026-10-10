@@ -24,13 +24,16 @@ import java.util.List;
 public class OrderService extends ServiceImpl<OrderMapper, Order> {
 
     private final ProductService productService;
+    private final MerchantService merchantService;
     private final OrderItemMapper orderItemMapper;
     private final ProductMapper productMapper;
 
     public OrderService(ProductService productService,
+                        MerchantService merchantService,
                         OrderItemMapper orderItemMapper,
                         ProductMapper productMapper) {
         this.productService = productService;
+        this.merchantService = merchantService;
         this.orderItemMapper = orderItemMapper;
         this.productMapper = productMapper;
     }
@@ -41,6 +44,13 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
      */
     @Transactional(rollbackFor = Exception.class)
     public OrderVO createOrder(OrderCreateDTO dto) {
+
+        // 0. 校验店家存在（和 ProductService.createProduct 同样的做法）。
+        //    不校验的话，传一个不存在的 merchantId 也能下单成功，
+        //    订单会带一个悬空的店家 id —— 查询、对账时都对不上人。
+        if (merchantService.getById(dto.getMerchantId()) == null) {
+            throw new BusinessException("店家不存在");
+        }
 
         BigDecimal totalAmount = BigDecimal.ZERO;
         List<OrderItem> items = new ArrayList<>();

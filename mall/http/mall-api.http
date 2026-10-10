@@ -188,6 +188,95 @@ PUT {{host}}/api/orders/{{orderId}}/cancel
 
 
 ### ------------------------------------------------------------
-### 11. 路径不存在（应返回 404 + code=404，而不是 500）
+### 11. 查询支付状态（新订单应为 status=0 待支付、payStatus=0 未支付）
+### ------------------------------------------------------------
+GET {{host}}/api/pay/{{orderId}}/status
+
+> {%
+    client.test("查询支付状态", function () {
+        client.assert(response.body.code === 0);
+        client.assert(response.body.data.payStatus === 0, "新订单支付状态应为 0（未支付）");
+    });
+%}
+
+
+### ------------------------------------------------------------
+### 12. 发起支付（返回模拟支付单号与链接，订单置为「支付中」payStatus=1）
+###     注意：只允许「待支付」订单发起支付。
+###     若已执行第 10 步「取消订单」，请先回到第 7 步重新下单。
+### ------------------------------------------------------------
+POST {{host}}/api/pay/{{orderId}}
+
+> {%
+    client.test("发起支付成功", function () {
+        client.assert(response.body.code === 0, "发起支付失败：" + response.body.message);
+        client.assert(response.body.data.payNo.indexOf("PAY") === 0, "支付单号应以 PAY 开头");
+    });
+%}
+
+
+### ------------------------------------------------------------
+### 13. 模拟支付回调（success=true 应变为已支付）
+###     幂等验证：把本请求连续执行两次，第二次仍返回 code=0 且状态不变
+###     （支付平台会因没收到成功响应而重试回调，所以重复回调必须是「静默忽略」）
+### ------------------------------------------------------------
+POST {{host}}/api/pay/callback
+Content-Type: application/json
+
+{
+  "orderId": {{orderId}},
+  "success": true
+}
+
+> {%
+    client.test("回调成功", function () {
+        client.assert(response.body.code === 0, "回调失败：" + response.body.message);
+    });
+%}
+
+
+### 13b. 回调后再查支付状态（应为 status=1 已支付、payStatus=2 已支付）
+GET {{host}}/api/pay/{{orderId}}/status
+
+> {%
+    client.test("订单已支付", function () {
+        client.assert(response.body.data.status === 1, "订单状态应为 1（已支付）");
+        client.assert(response.body.data.payStatus === 2, "支付状态应为 2（已支付）");
+    });
+%}
+
+
+### 13c. 回调失败（success=false）：订单回到待支付，可重新发起支付
+###      建议重新下单后再单独执行这一条，否则会把上面的已支付结果覆盖掉
+POST {{host}}/api/pay/callback
+Content-Type: application/json
+
+{
+  "orderId": {{orderId}},
+  "success": false
+}
+
+
+### ------------------------------------------------------------
+### 14. 参数校验失败（应返回 code=400 + 字段提示，而不是 500）
+### ------------------------------------------------------------
+POST {{host}}/api/merchants/register
+Content-Type: application/json
+
+{
+  "password": "123456",
+  "shopName": "缺少账号的店铺"
+}
+
+> {%
+    client.test("参数校验返回 400", function () {
+        client.assert(response.body.code === 400, "应为 400，实际：" + response.body.code);
+        client.assert(response.body.message === "账号不能为空", "提示语不对：" + response.body.message);
+    });
+%}
+
+
+### ------------------------------------------------------------
+### 15. 路径不存在（应返回 404 + code=404，而不是 500）
 ### ------------------------------------------------------------
 GET {{host}}/api/not-exists
