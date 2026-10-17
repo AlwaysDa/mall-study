@@ -2,7 +2,7 @@
 
 一个从零开始、由浅入深的 Java 后端学习项目。目标是用 Spring Boot 实现一个商城后端服务，包含**店家管理、货物管理、订单管理**三大核心模块，并配有**模拟支付**流程（不含真实支付，不接入任何支付渠道）。
 
-项目按 9 个阶段推进，每个阶段的完整教程放在 [`docs/`](./docs) 目录，可运行代码在 [`mall/`](./mall) 目录。每完成一个阶段都有对应的验收清单，保证「每阶段都能跑起来」。
+项目按 9 个阶段推进（阶段 0 是环境搭建，阶段 1~8 是开发），每个阶段的完整教程放在 [`docs/`](./docs) 目录，可运行代码在 [`mall/`](./mall) 目录。每完成一个阶段都有对应的验收清单，保证「每阶段都能跑起来」。
 
 ## 技术栈
 
@@ -10,16 +10,19 @@
 | --- | --- | --- |
 | 语言 | Java | 21（LTS） |
 | 框架 | Spring Boot | 4.1.1 |
-| 持久层 | MyBatis-Plus | 3.5.15 |
+| 持久层 | MyBatis-Plus | 3.5.15（boot4 starter + jsqlparser） |
 | 数据库 | MySQL | 8.4 LTS |
-| 构建工具 | Maven | 3.9.16 |
+| 密码加密 | Spring Security Crypto | BCrypt |
+| 测试 | JUnit 5 + Mockito + MockMvc | 随 Spring Boot 4 |
+| 构建工具 | Maven | 3.9.16（自带 Wrapper） |
 | 开发工具 | IntelliJ IDEA | 2025.3 |
 
 ## 项目结构
 
 ```
-studyProject/
-├── docs/                              # 分阶段开发文档
+mall-study/
+├── README.md                          # 本文件
+├── docs/                              # 教程与专题文档
 │   ├── README.md                      # 文档导航
 │   ├── 00-学习路线总览.md
 │   ├── 01-环境搭建.md
@@ -30,31 +33,51 @@ studyProject/
 │   ├── 06-阶段五-货物管理模块.md
 │   ├── 07-阶段六-订单管理模块.md
 │   ├── 08-阶段七-模拟支付.md
-│   └── 09-阶段八-进阶与工程化.md
+│   ├── 09-阶段八-进阶与工程化.md
+│   ├── 10-测试方案与实施.md
+│   └── 11-测试用例清单.md
 └── mall/                              # Spring Boot 工程
-    ├── sql/                           # 建表与 SQL 练习脚本
+    ├── http/mall-api.http             # 手工接口脚本（IDEA HTTP Client）
+    ├── sql/
     │   ├── 01-schema.sql              # 建库 + 基础商品表
     │   ├── 02-crud-practice.sql       # 基础 SQL 练习
-    │   └── 03-阶段三-商城建表.sql      # 商城 5 张核心表
+    │   ├── 03-阶段三-商城建表.sql      # 商城 5 张核心表
+    │   ├── 04-测试数据.sql            # 演示数据（2 个店家，各 6 个商品）
+    │   └── 05-测试库初始化.sql        # 独立测试库 mall_test
     ├── src/main/java/com/mall/mall/
     │   ├── MallApplication.java       # 启动类
     │   ├── common/                    # Result 统一返回、ErrorCode、BusinessException
     │   ├── config/                    # MyBatis-Plus、自动填充、密码加密等配置
-    │   ├── controller/                # 接口层
+    │   ├── controller/                # 接口层（店家 / 分类 / 商品 / 订单 / 支付）
     │   ├── dto/                       # 入参对象（含校验注解）
     │   ├── entity/                    # 数据库实体
     │   ├── handler/                   # 全局异常处理
     │   ├── mapper/                    # 持久层接口
     │   ├── service/                   # 业务层
     │   └── vo/                        # 出参对象
+    ├── src/main/resources/application.yml
+    ├── src/test/                      # 自动化测试（58 条）
+    ├── mvnw / mvnw.cmd                # Maven Wrapper
     └── pom.xml
 ```
+
+## 接口一览
+
+所有接口统一返回 `{ code, message, data }`。
+
+| 模块 | 接口前缀 | 主要接口 |
+| --- | --- | --- |
+| 店家管理 | `/api/merchants` | 注册、登录、详情、分页 |
+| 分类管理 | `/api/categories` | 新增、列表、修改、删除 |
+| 商品管理 | `/api/products` | 增删改查、分页、上下架、入库 |
+| 订单管理 | `/api/orders` | 下单、详情、分页、取消 |
+| 模拟支付 | `/api/pay` | 发起支付、回调、查询支付状态 |
 
 ## 快速开始
 
 ### 1. 环境要求
 
-JDK 21、Maven 3.9+、MySQL 8.4。
+JDK 21、MySQL 8.4；Maven 3.9+ 可以不装，工程自带 Wrapper。
 
 ### 2. 初始化数据库
 
@@ -63,6 +86,13 @@ JDK 21、Maven 3.9+、MySQL 8.4。
 ```
 01-schema.sql          # 建库 mall + 基础商品表
 03-阶段三-商城建表.sql   # 商城核心表：merchant / category / product / order / order_item
+```
+
+另外两个脚本按需执行：
+
+```
+04-测试数据.sql         # 可选：一键造演示数据（2 个店家，各 6 个商品）
+05-测试库初始化.sql     # 跑测试前必须执行：建独立测试库 mall_test
 ```
 
 ### 3. 配置数据库密码
@@ -99,7 +129,26 @@ cd mall
 mvn spring-boot:run
 ```
 
+没装 Maven 的话用自带的 Wrapper：Windows 下执行 `mvnw.cmd spring-boot:run`，macOS / Linux 下执行 `./mvnw spring-boot:run`。
+
 服务默认监听 `http://localhost:8080`。可先用 `GET /api/products/page?pageNum=1&pageSize=10` 验证是否启动成功。
+
+## 运行测试
+
+测试共 58 条：54 条接口集成测试（覆盖店家、分类、商品、订单、支付五个模块）、3 条纯单元测试，外加 1 条上下文加载测试。主力是集成测试，用 `@SpringBootTest` + MockMvc 打真实 MySQL。
+
+跑测试前先执行 `05-测试库初始化.sql` 建好 `mall_test` 库，测试只清空这个库，不会动开发库 `mall`。
+
+```powershell
+cd mall
+$env:DB_PASSWORD="你的MySQL密码"; mvn test
+mvn test -Dtest=OrderControllerTest
+mvn test "-Dtest=OrderControllerTest#下单成功"
+```
+
+三行命令依次是：跑全部、只跑一个测试类、只跑一个用例。
+
+测试写成什么样、为什么以集成测试为主、事务回滚怎么验证，见 [10-测试方案与实施](./docs/10-测试方案与实施.md)；各模块该测哪些点，见 [11-测试用例清单](./docs/11-测试用例清单.md)。
 
 ## 学习路线
 
@@ -122,12 +171,13 @@ mvn spring-boot:run
 - [x] 阶段三 · 商城项目架构
 - [x] 阶段四 · 店家管理模块
 - [x] 阶段五 · 货物管理模块
-- [ ] 阶段六 · 订单管理模块
-- [ ] 阶段七 · 模拟支付
-- [ ] 阶段八 · 进阶与工程化
+- [x] 阶段六 · 订单管理模块
+- [x] 阶段七 · 模拟支付
+- [ ] 阶段八 · 进阶与工程化 —— 参数校验统一处理与自动化测试已完成，JWT、Redis、接口文档、Docker 部署尚未开始
 
 ## 说明
 
 - 本项目为个人学习用途，支付环节为**模拟实现**，不涉及任何真实资金流转。
-- 所有接口统一返回 `{ code, message, data }` 结构；业务异常由全局处理器统一兜底。
+- 所有接口统一返回 `{ code, message, data }` 结构；业务异常由全局处理器统一兜底，参数校验失败返回 `code=400` 并带具体字段提示。
 - 金额字段一律使用 `BigDecimal`，与数据库的 `DECIMAL` 类型对齐。
+- 开发库 `mall` 与测试库 `mall_test` 相互隔离，测试不会污染手工准备的数据。
