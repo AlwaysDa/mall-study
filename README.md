@@ -37,7 +37,8 @@ mall-study/
 │   ├── 09-阶段八-进阶与工程化.md
 │   ├── 10-测试方案与实施.md
 │   ├── 11-测试用例清单.md
-│   └── 12-HTTP接口测试脚本使用说明.md
+│   ├── 12-HTTP接口测试脚本使用说明.md
+│   └── 13-Redis缓存接入与使用.md
 └── mall/                              # Spring Boot 工程
     ├── http/
     │   └── mall-api.http              # 手工回归脚本（用法见 docs/12）
