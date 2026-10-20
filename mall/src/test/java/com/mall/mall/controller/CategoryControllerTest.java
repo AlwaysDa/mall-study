@@ -23,7 +23,7 @@ class CategoryControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("K-1 新增分类：返回自增 id")
     void 新增分类() throws Exception {
-        mockMvc.perform(post("/api/categories")
+        perform(post("/api/categories")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"数码电子","sort":1}
@@ -42,7 +42,7 @@ class CategoryControllerTest extends BaseIntegrationTest {
         newCategory("数码电子");
         newCategory("家用电器");
 
-        mockMvc.perform(get("/api/categories"))
+        perform(get("/api/categories"))
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.length()").value(2));
     }
@@ -52,7 +52,7 @@ class CategoryControllerTest extends BaseIntegrationTest {
     void 修改分类() throws Exception {
         Category category = newCategory("数码电子");
 
-        mockMvc.perform(put("/api/categories/{id}", category.getId())
+        perform(put("/api/categories/{id}", category.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"数码3C","sort":9}
@@ -68,7 +68,7 @@ class CategoryControllerTest extends BaseIntegrationTest {
     void 删除空分类() throws Exception {
         Category category = newCategory("数码电子");
 
-        mockMvc.perform(delete("/api/categories/{id}", category.getId()))
+        perform(delete("/api/categories/{id}", category.getId()))
                 .andExpect(jsonPath("$.code").value(0));
 
         assertNull(categoryMapper.selectById(category.getId()), "分类应已被删除");
@@ -81,7 +81,7 @@ class CategoryControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(delete("/api/categories/{id}", category.getId()))
+        perform(delete("/api/categories/{id}", category.getId()))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("该分类下存在商品，无法删除"));
 

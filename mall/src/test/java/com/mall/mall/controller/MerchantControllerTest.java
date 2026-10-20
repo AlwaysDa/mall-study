@@ -22,7 +22,7 @@ class MerchantControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("M-1 注册成功：返回 code=0，且密码以 BCrypt 密文入库")
     void 注册成功() throws Exception {
-        mockMvc.perform(post("/api/merchants/register")
+        perform(post("/api/merchants/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"shop_a","password":"123456","shopName":"测试店铺"}
@@ -42,7 +42,7 @@ class MerchantControllerTest extends BaseIntegrationTest {
     void 账号重复注册() throws Exception {
         newMerchant("shop_a", "测试店铺", "123456");
 
-        mockMvc.perform(post("/api/merchants/register")
+        perform(post("/api/merchants/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"shop_a","password":"123456","shopName":"另一个店铺"}
@@ -56,7 +56,7 @@ class MerchantControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("M-3 注册缺必填项：返回 code=400 + 字段提示，不写库")
     void 注册缺必填项() throws Exception {
-        mockMvc.perform(post("/api/merchants/register")
+        perform(post("/api/merchants/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"password":"123456","shopName":"测试店铺"}
@@ -70,7 +70,7 @@ class MerchantControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("M-4 密码过短：返回 code=400 + 字段提示，不写库")
     void 密码过短() throws Exception {
-        mockMvc.perform(post("/api/merchants/register")
+        perform(post("/api/merchants/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"shop_a","password":"123","shopName":"测试店铺"}
@@ -86,7 +86,7 @@ class MerchantControllerTest extends BaseIntegrationTest {
     void 登录成功() throws Exception {
         newMerchant("shop_a", "测试店铺", "123456");
 
-        mockMvc.perform(post("/api/merchants/login")
+        perform(post("/api/merchants/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"shop_a","password":"123456"}
@@ -102,7 +102,7 @@ class MerchantControllerTest extends BaseIntegrationTest {
     void 密码错误() throws Exception {
         newMerchant("shop_a", "测试店铺", "123456");
 
-        mockMvc.perform(post("/api/merchants/login")
+        perform(post("/api/merchants/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"shop_a","password":"wrong-password"}
@@ -118,7 +118,7 @@ class MerchantControllerTest extends BaseIntegrationTest {
         merchant.setStatus(0);
         merchantMapper.updateById(merchant);
 
-        mockMvc.perform(post("/api/merchants/login")
+        perform(post("/api/merchants/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"shop_a","password":"123456"}
@@ -132,7 +132,7 @@ class MerchantControllerTest extends BaseIntegrationTest {
     void 查询店家详情() throws Exception {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
 
-        mockMvc.perform(get("/api/merchants/{id}", merchant.getId()))
+        perform(get("/api/merchants/{id}", merchant.getId()))
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.username").value("shop_a"))
                 .andExpect(jsonPath("$.data.shopName").value("测试店铺"));
@@ -141,7 +141,7 @@ class MerchantControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("M-10 查询不存在的店家：返回业务异常提示")
     void 查询不存在的店家() throws Exception {
-        mockMvc.perform(get("/api/merchants/{id}", 999999))
+        perform(get("/api/merchants/{id}", 999999))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("店家不存在"));
     }
@@ -152,7 +152,7 @@ class MerchantControllerTest extends BaseIntegrationTest {
         newMerchant("shop_a", "数码专营店", "123456");
         newMerchant("shop_b", "生活优选店", "123456");
 
-        mockMvc.perform(get("/api/merchants/page").param("keyword", "数码"))
+        perform(get("/api/merchants/page").param("keyword", "数码"))
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.records[0].username").value("shop_a"));

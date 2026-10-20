@@ -55,7 +55,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(post("/api/orders")
+        perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(singleItemBody(merchant.getId(), product.getId(), 2)))
                 .andExpect(status().isOk())
@@ -90,7 +90,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         Product p1 = newProduct(merchant.getId(), category.getId(), "iPhone 15", "1000.00", 10);
         Product p2 = newProduct(merchant.getId(), category.getId(), "小米 14", "500.00", 10);
 
-        mockMvc.perform(post("/api/orders")
+        perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(twoItemBody(merchant.getId(), p1.getId(), 2, p2.getId(), 3)))
                 .andExpect(jsonPath("$.code").value(0));
@@ -109,7 +109,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 5);
 
-        mockMvc.perform(post("/api/orders")
+        perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(singleItemBody(merchant.getId(), product.getId(), 10)))
                 .andExpect(jsonPath("$.code").value(500))
@@ -128,7 +128,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         Product enough = newProduct(merchant.getId(), category.getId(), "库存充足", "100.00", 10);
         Product notEnough = newProduct(merchant.getId(), category.getId(), "库存不足", "100.00", 1);
 
-        mockMvc.perform(post("/api/orders")
+        perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(twoItemBody(merchant.getId(), enough.getId(), 2, notEnough.getId(), 5)))
                 .andExpect(jsonPath("$.code").value(500));
@@ -143,7 +143,7 @@ class OrderControllerTest extends BaseIntegrationTest {
     void 商品不存在() throws Exception {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
 
-        mockMvc.perform(post("/api/orders")
+        perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(singleItemBody(merchant.getId(), 999999L, 1)))
                 .andExpect(jsonPath("$.code").value(500))
@@ -160,7 +160,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(post("/api/orders")
+        perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(singleItemBody(merchant.getId(), product.getId(), 1)))
                 .andExpect(jsonPath("$.code").value(0));
@@ -181,7 +181,7 @@ class OrderControllerTest extends BaseIntegrationTest {
     void 下单明细为空() throws Exception {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
 
-        mockMvc.perform(post("/api/orders")
+        perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchantId":%d,"buyerName":"张三","items":[]}
@@ -199,9 +199,9 @@ class OrderControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
                 .content(singleItemBody(merchant.getId(), product.getId(), 1)));
-        mockMvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
                 .content(singleItemBody(merchant.getId(), product.getId(), 1)));
 
         List<Order> orders = orderMapper.selectList(null);
@@ -216,12 +216,12 @@ class OrderControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
                 .content(singleItemBody(merchant.getId(), product.getId(), 2)));
 
         Order order = theOnlyOrder();
 
-        mockMvc.perform(get("/api/orders/{id}", order.getId()))
+        perform(get("/api/orders/{id}", order.getId()))
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.orderNo").value(order.getOrderNo()))
                 .andExpect(jsonPath("$.data.items.length()").value(1))
@@ -231,7 +231,7 @@ class OrderControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("O-9 查询不存在的订单：返回业务异常提示")
     void 查询不存在的订单() throws Exception {
-        mockMvc.perform(get("/api/orders/{id}", 999999))
+        perform(get("/api/orders/{id}", 999999))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("订单不存在"));
     }
@@ -243,9 +243,9 @@ class OrderControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
                 .content(singleItemBody(merchant.getId(), product.getId(), 1)));
-        mockMvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
                 .content(singleItemBody(merchant.getId(), product.getId(), 1)));
 
         // 把其中一单改成已支付
@@ -254,7 +254,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         paid.setStatus(1);
         orderMapper.updateById(paid);
 
-        mockMvc.perform(get("/api/orders/page").param("status", "0"))
+        perform(get("/api/orders/page").param("status", "0"))
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.records[0].status").value(0));
@@ -267,12 +267,12 @@ class OrderControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
                 .content(singleItemBody(merchant.getId(), product.getId(), 3)));
         assertEquals(47, stockOf(product.getId()));
 
         Order order = theOnlyOrder();
-        mockMvc.perform(put("/api/orders/{id}/cancel", order.getId()))
+        perform(put("/api/orders/{id}/cancel", order.getId()))
                 .andExpect(jsonPath("$.code").value(0));
 
         assertEquals(2, orderMapper.selectById(order.getId()).getStatus(), "状态应为已取消");
@@ -287,7 +287,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
         // 商品是真实存在的，但 merchantId 传一个不存在的
-        mockMvc.perform(post("/api/orders")
+        perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(singleItemBody(999999L, product.getId(), 1)))
                 .andExpect(jsonPath("$.code").value(500))
@@ -305,14 +305,14 @@ class OrderControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
                 .content(singleItemBody(merchant.getId(), product.getId(), 3)));
 
         Order order = theOnlyOrder();
         order.setStatus(1);          // 模拟已支付
         orderMapper.updateById(order);
 
-        mockMvc.perform(put("/api/orders/{id}/cancel", order.getId()))
+        perform(put("/api/orders/{id}/cancel", order.getId()))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("只有待支付订单才能取消"));
 
@@ -327,13 +327,13 @@ class OrderControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
                 .content(singleItemBody(merchant.getId(), product.getId(), 1)));
         Order order = theOnlyOrder();
 
-        mockMvc.perform(put("/api/orders/{id}/cancel", order.getId()))
+        perform(put("/api/orders/{id}/cancel", order.getId()))
                 .andExpect(jsonPath("$.code").value(0));
-        mockMvc.perform(put("/api/orders/{id}/cancel", order.getId()))
+        perform(put("/api/orders/{id}/cancel", order.getId()))
                 .andExpect(jsonPath("$.code").value(500));
 
         assertEquals(50, stockOf(product.getId()), "库存只应回补一次");

@@ -26,7 +26,7 @@ class ProductControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Category category = newCategory("数码电子");
 
-        mockMvc.perform(post("/api/products")
+        perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchantId":%d,"categoryId":%d,"name":"iPhone 15",
@@ -45,7 +45,7 @@ class ProductControllerTest extends BaseIntegrationTest {
     void 店家不存在() throws Exception {
         Category category = newCategory("数码电子");
 
-        mockMvc.perform(post("/api/products")
+        perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchantId":999999,"categoryId":%d,"name":"iPhone 15",
@@ -62,7 +62,7 @@ class ProductControllerTest extends BaseIntegrationTest {
     void 分类不存在() throws Exception {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
 
-        mockMvc.perform(post("/api/products")
+        perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchantId":%d,"categoryId":999999,"name":"iPhone 15",
@@ -81,7 +81,7 @@ class ProductControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(get("/api/products/{id}", product.getId()))
+        perform(get("/api/products/{id}", product.getId()))
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.name").value("iPhone 15"))
                 .andExpect(jsonPath("$.data.categoryName").value("数码电子"));
@@ -90,7 +90,7 @@ class ProductControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("P-5 查询不存在的商品：返回业务异常提示")
     void 查询不存在的商品() throws Exception {
-        mockMvc.perform(get("/api/products/{id}", 999999))
+        perform(get("/api/products/{id}", 999999))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("商品不存在"));
     }
@@ -104,7 +104,7 @@ class ProductControllerTest extends BaseIntegrationTest {
         newProduct(shopA.getId(), category.getId(), "iPhone 15", "4999.00", 50);
         newProduct(shopB.getId(), category.getId(), "小米 14", "4299.00", 40);
 
-        mockMvc.perform(get("/api/products/page").param("merchantId", String.valueOf(shopA.getId())))
+        perform(get("/api/products/page").param("merchantId", String.valueOf(shopA.getId())))
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.records[0].name").value("iPhone 15"));
@@ -118,7 +118,7 @@ class ProductControllerTest extends BaseIntegrationTest {
         newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
         newProduct(merchant.getId(), category.getId(), "小米 14", "4299.00", 40);
 
-        mockMvc.perform(get("/api/products/page").param("keyword", "iPhone"))
+        perform(get("/api/products/page").param("keyword", "iPhone"))
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.records[0].name").value("iPhone 15"));
     }
@@ -130,7 +130,7 @@ class ProductControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(put("/api/products/{id}/status", product.getId()).param("status", "0"))
+        perform(put("/api/products/{id}/status", product.getId()).param("status", "0"))
                 .andExpect(jsonPath("$.code").value(0));
 
         assertEquals(0, productMapper.selectById(product.getId()).getStatus());
@@ -143,7 +143,7 @@ class ProductControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(post("/api/products/{id}/stock-in", product.getId()).param("quantity", "50"))
+        perform(post("/api/products/{id}/stock-in", product.getId()).param("quantity", "50"))
                 .andExpect(jsonPath("$.code").value(0));
 
         assertEquals(100, stockOf(product.getId()));
@@ -156,7 +156,7 @@ class ProductControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(post("/api/products/{id}/stock-in", product.getId()).param("quantity", "0"))
+        perform(post("/api/products/{id}/stock-in", product.getId()).param("quantity", "0"))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("入库数量必须大于0"));
 
@@ -173,7 +173,7 @@ class ProductControllerTest extends BaseIntegrationTest {
         product.setStatus(0);
         productMapper.updateById(product);
 
-        mockMvc.perform(put("/api/products/{id}", product.getId())
+        perform(put("/api/products/{id}", product.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchantId":%d,"categoryId":%d,"name":"iPhone 15 Pro",
@@ -189,7 +189,7 @@ class ProductControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("P-13 新增商品缺必填项：返回 code=400，不写库")
     void 新增商品缺必填项() throws Exception {
-        mockMvc.perform(post("/api/products")
+        perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"没有店家也没有价格"}
@@ -206,7 +206,7 @@ class ProductControllerTest extends BaseIntegrationTest {
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
-        mockMvc.perform(delete("/api/products/{id}", product.getId()))
+        perform(delete("/api/products/{id}", product.getId()))
                 .andExpect(jsonPath("$.code").value(0));
 
         assertNull(productMapper.selectById(product.getId()));

@@ -8,6 +8,7 @@ import com.mall.mall.dto.MerchantLoginDTO;
 import com.mall.mall.dto.MerchantRegisterDTO;
 import com.mall.mall.entity.Merchant;
 import com.mall.mall.mapper.MerchantMapper;
+import com.mall.mall.util.JwtUtil;
 import com.mall.mall.vo.MerchantVO;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -17,9 +18,11 @@ import org.springframework.stereotype.Service;
 public class MerchantService extends ServiceImpl<MerchantMapper, Merchant> {
 
     private final BCryptPasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
 
-    public MerchantService(BCryptPasswordEncoder passwordEncoder) {
+    public MerchantService(BCryptPasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
         this.passwordEncoder = passwordEncoder;
+        this.jwtUtil = jwtUtil;
     }
 
     // 注册
@@ -50,6 +53,8 @@ public class MerchantService extends ServiceImpl<MerchantMapper, Merchant> {
         }
         MerchantVO vo = new MerchantVO();
         BeanUtils.copyProperties(merchant, vo);
+        // 登录成功签发令牌，前端保存后，后续请求带上它才能访问受保护接口
+        vo.setToken(jwtUtil.generate(merchant.getId(), merchant.getUsername()));
         return vo;
     }
 

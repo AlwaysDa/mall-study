@@ -9,14 +9,18 @@ import com.mall.mall.mapper.MerchantMapper;
 import com.mall.mall.mapper.OrderItemMapper;
 import com.mall.mall.mapper.OrderMapper;
 import com.mall.mall.mapper.ProductMapper;
+import com.mall.mall.util.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.math.BigDecimal;
 
@@ -27,6 +31,12 @@ import java.math.BigDecimal;
  * 加了的话，业务代码里的事务会「加入」测试的事务，
  * 于是「库存不足应回滚」这类用例测到的其实是测试事务的回滚，失去意义。
  * 改用 @BeforeEach 清库来保证用例之间互不干扰。
+ *
+ * 关于登录鉴权（阶段八新增）：
+ * 加了 AuthInterceptor 之后，/api/** 的接口都要带 JWT，否则返回 401。
+ * 为了让「业务用例」不必每个都手写登录流程，基类提供 {@link #perform} ——
+ * 它会自动带上当前用例的令牌（token 字段），语义就是「已登录客户端发的请求」。
+ * 想测未登录/过期/篡改，直接调用 mockMvc.perform(...) 自己控制请求头即可。
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -39,6 +49,16 @@ public abstract class BaseIntegrationTest {
 
     @Autowired
     protected BCryptPasswordEncoder passwordEncoder;
+
+    @Autowired
+    protected JwtUtil jwtUtil;
+
+    /**
+     * 当前用例使用的登录令牌。
+     * 默认是「店家 ID=1」的令牌（很多用例只是查分类/商品，并没有建店家，但接口仍需令牌）。
+     * 调用 newMerchant(...) 后会切换成该店家的令牌。
+     */
+    protected String token;
 
     @Autowired
     protected MerchantMapper merchantMapper;
@@ -66,11 +86,23 @@ public abstract class BaseIntegrationTest {
         productMapper.delete(null);
         categoryMapper.delete(null);
         merchantMapper.delete(null);
+        // 清库后重置令牌：默认身份是「店家 ID=1」
+        this.token = jwtUtil.generate(1L, "test-merchant");
+    }
+
+    // ---------------- 登录令牌相关 ----------------
+
+    /**
+     * 「已登录客户端」的请求：自动带上 Authorization: Bearer xxx。
+     * 业务用例统一用它；要测鉴权失败，直接用 mockMvc.perform(...) 自己构造请求头。
+     */
+    protected ResultActions perform(MockHttpServletRequestBuilder builder) throws Exception {
+        return mockMvc.perform(builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token));
     }
 
     // ---------------- 造数据的快捷方法 ----------------
 
-    /** 新建店家，密码会用 BCrypt 真实加密（这样登录用例才能通过） */
+    /** 新建店家，密码会用 BCrypt 真实加密（这样登录用例才能通过），并把当前令牌切换成该店家 */
     protected Merchant newMerchant(String username, String shopName, String rawPassword) {
         Merchant merchant = new Merchant();
         merchant.setUsername(username);
@@ -80,6 +112,8 @@ public abstract class BaseIntegrationTest {
         merchant.setPhone("13800000000");
         merchant.setStatus(1);
         merchantMapper.insert(merchant);
+        // 登录态跟着当前店家走，后续 perform(...) 发出的请求身份就是它
+        this.token = jwtUtil.generate(merchant.getId(), merchant.getUsername());
         return merchant;
     }
 

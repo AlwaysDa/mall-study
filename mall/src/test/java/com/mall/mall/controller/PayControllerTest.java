@@ -40,7 +40,7 @@ class PayControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Order order = pendingOrder(merchant);
 
-        mockMvc.perform(post("/api/pay/{orderId}", order.getId()))
+        perform(post("/api/pay/{orderId}", order.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.payNo", startsWith("PAY")))
@@ -56,7 +56,7 @@ class PayControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("Y-2 对不存在的订单发起支付：被拦截")
     void 对不存在的订单发起支付() throws Exception {
-        mockMvc.perform(post("/api/pay/{orderId}", 999999))
+        perform(post("/api/pay/{orderId}", 999999))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("订单不存在"));
     }
@@ -67,7 +67,7 @@ class PayControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Order order = newOrder(merchant.getId(), "100.00", 1, 2);   // 已支付
 
-        mockMvc.perform(post("/api/pay/{orderId}", order.getId()))
+        perform(post("/api/pay/{orderId}", order.getId()))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("只有待支付订单才能发起支付"));
 
@@ -80,7 +80,7 @@ class PayControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Order order = newOrder(merchant.getId(), "100.00", 2, 0);   // 已取消
 
-        mockMvc.perform(post("/api/pay/{orderId}", order.getId()))
+        perform(post("/api/pay/{orderId}", order.getId()))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("只有待支付订单才能发起支付"));
 
@@ -94,7 +94,7 @@ class PayControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Order order = pendingOrder(merchant);
 
-        mockMvc.perform(post("/api/pay/callback")
+        perform(post("/api/pay/callback")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(callbackBody(order.getId(), true)))
                 .andExpect(status().isOk())
@@ -111,7 +111,7 @@ class PayControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Order order = pendingOrder(merchant);
 
-        mockMvc.perform(post("/api/pay/callback")
+        perform(post("/api/pay/callback")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(callbackBody(order.getId(), false)))
                 .andExpect(jsonPath("$.code").value(0));
@@ -121,7 +121,7 @@ class PayControllerTest extends BaseIntegrationTest {
         assertEquals(3, reloaded.getPayStatus(), "支付状态应为支付失败");
 
         // 失败之后可以重新发起支付
-        mockMvc.perform(post("/api/pay/{orderId}", order.getId()))
+        perform(post("/api/pay/{orderId}", order.getId()))
                 .andExpect(jsonPath("$.code").value(0));
         assertEquals(1, reloadOrder(order.getId()).getPayStatus(), "重新发起支付后应为支付中");
     }
@@ -132,14 +132,14 @@ class PayControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Order order = pendingOrder(merchant);
 
-        mockMvc.perform(post("/api/pay/callback")
+        perform(post("/api/pay/callback")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(callbackBody(order.getId(), true)))
                 .andExpect(jsonPath("$.code").value(0));
 
         // 支付平台重试：再回调一次同样的成功结果
         // 注意本项目对重复回调是「静默忽略」，所以仍然是 code=0，而不是抛异常
-        mockMvc.perform(post("/api/pay/callback")
+        perform(post("/api/pay/callback")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(callbackBody(order.getId(), true)))
                 .andExpect(status().isOk())
@@ -156,7 +156,7 @@ class PayControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Order order = newOrder(merchant.getId(), "100.00", 1, 2);   // 已支付
 
-        mockMvc.perform(post("/api/pay/callback")
+        perform(post("/api/pay/callback")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(callbackBody(order.getId(), false)))
                 .andExpect(jsonPath("$.code").value(0));
@@ -172,7 +172,7 @@ class PayControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Order order = newOrder(merchant.getId(), "100.00", 2, 0);   // 已取消
 
-        mockMvc.perform(post("/api/pay/callback")
+        perform(post("/api/pay/callback")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(callbackBody(order.getId(), true)))
                 .andExpect(jsonPath("$.code").value(500))
@@ -187,7 +187,7 @@ class PayControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Order order = pendingOrder(merchant);
 
-        mockMvc.perform(post("/api/pay/callback")
+        perform(post("/api/pay/callback")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"orderId":%d}
@@ -204,7 +204,7 @@ class PayControllerTest extends BaseIntegrationTest {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Order order = pendingOrder(merchant);
 
-        mockMvc.perform(get("/api/pay/{orderId}/status", order.getId()))
+        perform(get("/api/pay/{orderId}/status", order.getId()))
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.orderId").value(order.getId()))
                 .andExpect(jsonPath("$.data.orderNo").value(order.getOrderNo()))
@@ -212,7 +212,7 @@ class PayControllerTest extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.data.payStatus").value(0));
 
         // 查不存在的订单
-        mockMvc.perform(get("/api/pay/{orderId}/status", 999999))
+        perform(get("/api/pay/{orderId}/status", 999999))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("订单不存在"));
     }
