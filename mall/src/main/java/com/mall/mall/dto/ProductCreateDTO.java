@@ -7,8 +7,7 @@ import java.math.BigDecimal;
 
 @Data
 public class ProductCreateDTO {
-    @NotNull(message = "店家ID不能为空")
-    private Long merchantId;
+    // 店家身份不再从请求体读取：由 JWT 解析后从 request attribute 传入，避免伪造 merchantId
 
     @NotNull(message = "分类ID不能为空")
     private Long categoryId;

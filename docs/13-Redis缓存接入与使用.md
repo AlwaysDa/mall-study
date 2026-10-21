@@ -304,6 +304,7 @@ public ProductVO getProduct(Long id) {
 
 - 本项目使用 Spring Boot 4，`ObjectMapper` 是 Jackson 3 的 `tools.jackson.databind.ObjectMapper`，不要误用旧包 `com.fasterxml.jackson.databind.ObjectMapper`；
 - 缓存里存 `ProductVO` 的 JSON，而不是实体 `Product`，因为 VO 多了一个 `categoryName`，而且不会把数据库实体直接暴露出去；
+- 命中缓存后仍要校验数据归属（A-5 越权控制）：缓存按商品 id 共享，但只有商品所属店家能拿到返回结果；
 - 示例让缓存读异常直接暴露，方便学习时发现环境问题。生产环境更稳妥的做法是捕获异常并回源数据库，见第七节；
 - `ThreadLocalRandom.current().nextLong(300)` 给 TTL 加 0~5 分钟随机值，避免一批商品缓存同时过期。
 
@@ -512,7 +513,7 @@ netstat -ano | findstr :6379
 6. 可选：补 Redis 异常时的降级，保证 Redis 挂掉时还能回源数据库；
 7. 跑一遍商品相关测试，确认原有功能没有被缓存改坏。
 
-> 本项目进度：依赖、连接配置、商品缓存读取与各类失效点已落地；实现位置是 `ProductService`（缓存读取与商品写操作失效）、`OrderService`（下单/取消后的库存失效）、`CategoryService`（分类改名后的失效）。自动化用例 P-15 ~ P-18 已覆盖读写与失效，`mvn test` 共 72 条全绿。Redis 异常降级（第 6 步）暂未实现；集成测试需要在本地启动 Memurai / Redis 并配置 `DB_PASSWORD` 后执行。
+> 本项目进度：依赖、连接配置、商品缓存读取与各类失效点已落地；实现位置是 `ProductService`（缓存读取与商品写操作失效）、`OrderService`（下单/取消后的库存失效）、`CategoryService`（分类改名后的失效）。自动化用例 P-15 ~ P-18 已覆盖读写与失效，`mvn test` 共 77 条全绿。Redis 异常降级（第 6 步）暂未实现；集成测试需要在本地启动 Memurai / Redis 并配置 `DB_PASSWORD` 后执行。
 
 完成后的自检：
 

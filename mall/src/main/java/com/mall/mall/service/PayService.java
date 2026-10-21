@@ -1,6 +1,7 @@
 package com.mall.mall.service;
 
 import com.mall.mall.common.BusinessException;
+import com.mall.mall.common.ForbiddenException;
 import com.mall.mall.dto.PayCallbackDTO;
 import com.mall.mall.entity.Order;
 import com.mall.mall.vo.PayResultVO;
@@ -33,12 +34,12 @@ public class PayService {
      *
      * 真实场景这里会调用第三方接口生成支付单、拿到收银台链接；
      * 我们直接拼一个假的支付单号和链接，并把订单置为「支付中」。
+     *
+     * @param merchantId 当前登录店家 id（来自 JWT），用于校验订单归属
+     * @throws ForbiddenException 订单属于其他店家时抛出
      */
-    public PayResultVO createPay(Long orderId) {
-        Order order = orderService.getById(orderId);
-        if (order == null) {
-            throw new BusinessException("订单不存在");
-        }
+    public PayResultVO createPay(Long orderId, Long merchantId) {
+        Order order = requireOwnedOrder(orderId, merchantId);
         // 状态机：只有「待支付」订单能发起支付
         // （已支付订单的 status 已经是 1、已取消是 2，都会被这一条拦下）
         if (order.getStatus() != 0) {
@@ -98,13 +99,12 @@ public class PayService {
     }
 
     /**
-     * 查询某订单的支付状态。
+     * 查询某订单的支付状态。只能查看自己店家的订单。
+     *
+     * @throws ForbiddenException 订单属于其他店家时抛出
      */
-    public PayStatusVO getPayStatus(Long orderId) {
-        Order order = orderService.getById(orderId);
-        if (order == null) {
-            throw new BusinessException("订单不存在");
-        }
+    public PayStatusVO getPayStatus(Long orderId, Long merchantId) {
+        Order order = requireOwnedOrder(orderId, merchantId);
         PayStatusVO vo = new PayStatusVO();
         vo.setOrderId(order.getId());
         vo.setOrderNo(order.getOrderNo());
@@ -112,5 +112,23 @@ public class PayService {
         vo.setStatus(order.getStatus());
         vo.setPayStatus(order.getPayStatus());
         return vo;
+    }
+
+    /**
+     * 按 id 取订单，并确认它属于当前登录店家。
+     * 支付回调不调用本方法：第三方平台没有店家令牌，身份校验应在真实项目中用验签完成。
+     *
+     * @throws BusinessException  订单不存在时抛出
+     * @throws ForbiddenException 订单属于其他店家时抛出
+     */
+    private Order requireOwnedOrder(Long orderId, Long merchantId) {
+        Order order = orderService.getById(orderId);
+        if (order == null) {
+            throw new BusinessException("订单不存在");
+        }
+        if (!merchantId.equals(order.getMerchantId())) {
+            throw new ForbiddenException("无权操作该订单");
+        }
+        return order;
     }
 }

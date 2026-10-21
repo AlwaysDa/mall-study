@@ -24,21 +24,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("订单管理接口")
 class OrderControllerTest extends BaseIntegrationTest {
 
-    /** 单商品下单请求体 */
-    private String singleItemBody(Long merchantId, Long productId, int quantity) {
+    /** 单商品下单请求体（店家身份取自 JWT，请求体不再传 merchantId） */
+    private String singleItemBody(Long productId, int quantity) {
         return """
-                {"merchantId":%d,"buyerName":"张三","buyerPhone":"13800000000",
+                {"buyerName":"张三","buyerPhone":"13800000000",
                  "items":[{"productId":%d,"quantity":%d}]}
-                """.formatted(merchantId, productId, quantity);
+                """.formatted(productId, quantity);
     }
 
     /** 双商品下单请求体 */
-    private String twoItemBody(Long merchantId, Long productId1, int quantity1,
-                               Long productId2, int quantity2) {
+    private String twoItemBody(Long productId1, int quantity1, Long productId2, int quantity2) {
         return """
-                {"merchantId":%d,"buyerName":"张三",
+                {"buyerName":"张三",
                  "items":[{"productId":%d,"quantity":%d},{"productId":%d,"quantity":%d}]}
-                """.formatted(merchantId, productId1, quantity1, productId2, quantity2);
+                """.formatted(productId1, quantity1, productId2, quantity2);
     }
 
     /** 取库里唯一的那张订单 */
@@ -57,7 +56,7 @@ class OrderControllerTest extends BaseIntegrationTest {
 
         perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(singleItemBody(merchant.getId(), product.getId(), 2)))
+                        .content(singleItemBody(product.getId(), 2)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.orderNo").isNotEmpty());
@@ -92,7 +91,7 @@ class OrderControllerTest extends BaseIntegrationTest {
 
         perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(twoItemBody(merchant.getId(), p1.getId(), 2, p2.getId(), 3)))
+                        .content(twoItemBody(p1.getId(), 2, p2.getId(), 3)))
                 .andExpect(jsonPath("$.code").value(0));
 
         assertEquals(2, orderItemMapper.selectCount(null));
@@ -111,7 +110,7 @@ class OrderControllerTest extends BaseIntegrationTest {
 
         perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(singleItemBody(merchant.getId(), product.getId(), 10)))
+                        .content(singleItemBody(product.getId(), 10)))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("商品库存不足: iPhone 15"));
 
@@ -130,7 +129,7 @@ class OrderControllerTest extends BaseIntegrationTest {
 
         perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(twoItemBody(merchant.getId(), enough.getId(), 2, notEnough.getId(), 5)))
+                        .content(twoItemBody(enough.getId(), 2, notEnough.getId(), 5)))
                 .andExpect(jsonPath("$.code").value(500));
 
         assertEquals(10, stockOf(enough.getId()), "第一件的扣减必须回滚");
@@ -145,7 +144,7 @@ class OrderControllerTest extends BaseIntegrationTest {
 
         perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(singleItemBody(merchant.getId(), 999999L, 1)))
+                        .content(singleItemBody(999999L, 1)))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("商品不存在: 999999"));
 
@@ -162,7 +161,7 @@ class OrderControllerTest extends BaseIntegrationTest {
 
         perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(singleItemBody(merchant.getId(), product.getId(), 1)))
+                        .content(singleItemBody(product.getId(), 1)))
                 .andExpect(jsonPath("$.code").value(0));
 
         // 下单之后商品被改名、改价
@@ -184,8 +183,8 @@ class OrderControllerTest extends BaseIntegrationTest {
         perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"merchantId":%d,"buyerName":"张三","items":[]}
-                                """.formatted(merchant.getId())))
+                                {"buyerName":"张三","items":[]}
+                                """))
                 .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.message").value("订单明细不能为空"));
 
@@ -200,9 +199,9 @@ class OrderControllerTest extends BaseIntegrationTest {
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
         perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
-                .content(singleItemBody(merchant.getId(), product.getId(), 1)));
+                .content(singleItemBody(product.getId(), 1)));
         perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
-                .content(singleItemBody(merchant.getId(), product.getId(), 1)));
+                .content(singleItemBody(product.getId(), 1)));
 
         List<Order> orders = orderMapper.selectList(null);
         assertEquals(2, orders.size());
@@ -217,7 +216,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
         perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
-                .content(singleItemBody(merchant.getId(), product.getId(), 2)));
+                .content(singleItemBody(product.getId(), 2)));
 
         Order order = theOnlyOrder();
 
@@ -244,9 +243,9 @@ class OrderControllerTest extends BaseIntegrationTest {
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
         perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
-                .content(singleItemBody(merchant.getId(), product.getId(), 1)));
+                .content(singleItemBody(product.getId(), 1)));
         perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
-                .content(singleItemBody(merchant.getId(), product.getId(), 1)));
+                .content(singleItemBody(product.getId(), 1)));
 
         // 把其中一单改成已支付
         List<Order> orders = orderMapper.selectList(null);
@@ -268,7 +267,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
         perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
-                .content(singleItemBody(merchant.getId(), product.getId(), 3)));
+                .content(singleItemBody(product.getId(), 3)));
         assertEquals(47, stockOf(product.getId()));
 
         Order order = theOnlyOrder();
@@ -280,16 +279,17 @@ class OrderControllerTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("O-15 下单店家不存在：被拦截，不写库、不扣库存")
+    @DisplayName("O-15 令牌对应店家不存在：被拦截，不写库、不扣库存")
     void 下单店家不存在() throws Exception {
         Merchant merchant = newMerchant("shop_a", "测试店铺", "123456");
         Category category = newCategory("数码电子");
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
+        // 签名有效但店家不存在的令牌：店家身份只认 token，不再看请求体
+        token = jwtUtil.generate(999999L, "ghost");
 
-        // 商品是真实存在的，但 merchantId 传一个不存在的
         perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(singleItemBody(999999L, product.getId(), 1)))
+                        .content(singleItemBody(product.getId(), 1)))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("店家不存在"));
 
@@ -306,7 +306,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
         perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
-                .content(singleItemBody(merchant.getId(), product.getId(), 3)));
+                .content(singleItemBody(product.getId(), 3)));
 
         Order order = theOnlyOrder();
         order.setStatus(1);          // 模拟已支付
@@ -328,7 +328,7 @@ class OrderControllerTest extends BaseIntegrationTest {
         Product product = newProduct(merchant.getId(), category.getId(), "iPhone 15", "4999.00", 50);
 
         perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
-                .content(singleItemBody(merchant.getId(), product.getId(), 1)));
+                .content(singleItemBody(product.getId(), 1)));
         Order order = theOnlyOrder();
 
         perform(put("/api/orders/{id}/cancel", order.getId()))

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mall.mall.common.BusinessException;
+import com.mall.mall.common.ForbiddenException;
 import com.mall.mall.dto.OrderCreateDTO;
 import com.mall.mall.entity.Order;
 import com.mall.mall.entity.OrderItem;
@@ -49,14 +50,16 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
     /**
      * 下单：生成订单 + 生成明细（快照）+ 扣减库存，三步必须原子化。
      * 任一步抛异常，整个事务回滚 —— 不会出现「订单写了但库存没扣」的中间态。
+     *
+     * @param merchantId 当前登录店家 id，来自 JWT；订单归属和商品校验都以它为准
+     * @param dto        下单请求
+     * @throws ForbiddenException 使用了其他店家的商品时抛出
      */
     @Transactional(rollbackFor = Exception.class)
-    public OrderVO createOrder(OrderCreateDTO dto) {
+    public OrderVO createOrder(Long merchantId, OrderCreateDTO dto) {
 
-        // 0. 校验店家存在（和 ProductService.createProduct 同样的做法）。
-        //    不校验的话，传一个不存在的 merchantId 也能下单成功，
-        //    订单会带一个悬空的店家 id —— 查询、对账时都对不上人。
-        if (merchantService.getById(dto.getMerchantId()) == null) {
+        // 0. 校验令牌对应的店家存在，避免为已删除/伪造的店家生成悬空订单
+        if (merchantService.getById(merchantId) == null) {
             throw new BusinessException("店家不存在");
         }
 
@@ -73,6 +76,10 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
             Product product = productService.getById(itemDTO.getProductId());
             if (product == null) {
                 throw new BusinessException("商品不存在: " + itemDTO.getProductId());
+            }
+            // 不能拿其他店家的商品下单：否则可以恶意消耗别人的库存
+            if (!merchantId.equals(product.getMerchantId())) {
+                throw new ForbiddenException("无权操作该商品: " + itemDTO.getProductId());
             }
             if (product.getStock() < itemDTO.getQuantity()) {
                 throw new BusinessException("商品库存不足: " + product.getName());
@@ -100,7 +107,8 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
         // 3. 保存订单（先存订单，才能拿到自增 id 给明细用）
         Order order = new Order();
         order.setOrderNo(generateOrderNo());
-        order.setMerchantId(dto.getMerchantId());
+        // 订单归属强制取自令牌，忽略请求体里可能伪造的 merchantId
+        order.setMerchantId(merchantId);
         order.setBuyerName(dto.getBuyerName());
         order.setBuyerPhone(dto.getBuyerPhone());
         order.setTotalAmount(totalAmount);
@@ -122,13 +130,12 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
 
     /**
      * 取消订单：只有待支付可取消，取消时回补库存。
+     *
+     * @throws ForbiddenException 订单属于其他店家时抛出
      */
     @Transactional(rollbackFor = Exception.class)
-    public void cancelOrder(Long id) {
-        Order order = this.getById(id);
-        if (order == null) {
-            throw new BusinessException("订单不存在");
-        }
+    public void cancelOrder(Long id, Long merchantId) {
+        Order order = requireOwnedOrder(id, merchantId);
         if (order.getStatus() != 0) {
             throw new BusinessException("只有待支付订单才能取消");
         }
@@ -150,13 +157,12 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
     }
 
     /**
-     * 订单详情：带出明细列表。
+     * 订单详情：带出明细列表。只能查看自己店家的订单。
+     *
+     * @throws ForbiddenException 订单属于其他店家时抛出
      */
-    public OrderVO getOrderDetail(Long id) {
-        Order order = this.getById(id);
-        if (order == null) {
-            throw new BusinessException("订单不存在");
-        }
+    public OrderVO getOrderDetail(Long id, Long merchantId) {
+        Order order = requireOwnedOrder(id, merchantId);
         OrderVO vo = toVO(order);
         List<OrderItem> items = orderItemMapper.selectList(
                 new QueryWrapper<OrderItem>().eq("order_id", id));
@@ -165,13 +171,11 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
     }
 
     /**
-     * 分页查询：可按店家、状态过滤。
+     * 分页查询：店家维度强制来自当前登录身份，另可按状态过滤。
      */
     public Page<OrderVO> page(Long merchantId, Integer status, int pageNum, int pageSize) {
         QueryWrapper<Order> wrapper = new QueryWrapper<>();
-        if (merchantId != null) {
-            wrapper.eq("merchant_id", merchantId);
-        }
+        wrapper.eq("merchant_id", merchantId);
         if (status != null) {
             wrapper.eq("status", status);
         }
@@ -182,6 +186,23 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
         Page<OrderVO> voPage = new Page<>(pageNum, pageSize, page.getTotal());
         voPage.setRecords(page.getRecords().stream().map(this::toVO).toList());
         return voPage;
+    }
+
+    /**
+     * 按 id 取订单，并确认它属于当前登录店家。
+     *
+     * @throws BusinessException  订单不存在时抛出
+     * @throws ForbiddenException 订单属于其他店家时抛出
+     */
+    private Order requireOwnedOrder(Long id, Long merchantId) {
+        Order order = this.getById(id);
+        if (order == null) {
+            throw new BusinessException("订单不存在");
+        }
+        if (!merchantId.equals(order.getMerchantId())) {
+            throw new ForbiddenException("无权操作该订单");
+        }
+        return order;
     }
 
     // 实体 -> VO。注意：这里不带明细，需要明细请用 getOrderDetail

@@ -26,7 +26,8 @@ import java.nio.charset.StandardCharsets;
  *     public Result<XxxVO> xxx(@RequestAttribute(AuthInterceptor.ATTR_MERCHANT_ID) Long merchantId)
  *
  * 注意这里是「认证」（你是谁）而不是「授权」（你能改哪些数据）。
- * 想做到「店家只能操作自己的商品/订单」，还要在业务查询里按 merchantId 过滤，见阶段八文档。
+ * 授权在业务层完成：Service 会用这个 merchantId 校验商品/订单归属，
+ * 跨店操作由 ForbiddenException 返回 403，见阶段八文档 A-5。
  *
  * 失败时返回 HTTP 401 + 统一 Result JSON（与全局异常处理保持同一套返回结构）。
  * 细节：为什么不用抛异常交给 GlobalExceptionHandler？

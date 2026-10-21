@@ -17,7 +17,7 @@
 @token =
 
 ### 下面是需要按实际数据填写的 id：
-###   先执行「1 注册」→「2 登录」拿到 merchantId 与 token；
+###   先执行「1 注册」→「2 登录」拿到 token；
 ###   再执行「3 新增分类」「4 新增商品」/「5 商品分页」拿 categoryId / productId。
 ### 也可以先跑 mall/sql/04-测试数据.sql，用里面的测试店家与商品。
 ###
@@ -25,7 +25,10 @@
 ###   /api/** 下除「注册、登录、支付回调」外都需要登录，请务必先执行第 2 步登录，
 ###   登录响应脚本会把 token 写入全局变量，各请求里的 Authorization 头会自动带上它。
 ###   若没执行登录，受保护接口会返回 401（未登录，请先登录）。
-@merchantId = 1
+###
+### 关于越权控制（A-5）：
+###   商品/订单的店家身份只认 token，请求体或查询参数里不再需要 merchantId。
+###   即使手工传了别人的 id，服务端也不会采用；跨店访问会返回 403（无权操作）。
 @categoryId = 1
 @productId = 1
 @orderId = 1
@@ -55,7 +58,7 @@ Content-Type: application/json
 
 
 ### ------------------------------------------------------------
-### 2. 登录（成功后把 merchantId 与 token 存入全局变量，供后续请求使用）
+### 2. 登录（成功后把 token 存入全局变量，供后续请求使用）
 ### ------------------------------------------------------------
 POST {{host}}/api/merchants/login
 Content-Type: application/json
@@ -70,8 +73,7 @@ Content-Type: application/json
         client.assert(response.body.code === 0, "登录失败：" + response.body.message);
         client.assert(response.body.data.password === undefined, "返回体里不应包含 password");
     });
-    client.global.set("merchantId", response.body.data.id);
-    // 登录接口返回的 JWT，后续受保护接口都要带上
+    // 登录接口返回的 JWT，后续受保护接口都要带上；店家身份由它决定
     client.global.set("token", response.body.data.token);
 %}
 
@@ -105,7 +107,6 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "merchantId": {{merchantId}},
   "categoryId": {{categoryId}},
   "name": "演示商品",
   "description": "用于接口回归测试",
@@ -123,7 +124,7 @@ Content-Type: application/json
 ### ------------------------------------------------------------
 ### 5. 商品分页（从返回结果里挑一个 id 填到文件顶部的 @productId）
 ### ------------------------------------------------------------
-GET {{host}}/api/products/page?merchantId={{merchantId}}&pageNum=1&pageSize=10
+GET {{host}}/api/products/page?pageNum=1&pageSize=10
 Authorization: Bearer {{token}}
 
 > {%
@@ -156,7 +157,6 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "merchantId": {{merchantId}},
   "buyerName": "张三",
   "buyerPhone": "13800000000",
   "items": [
@@ -191,7 +191,7 @@ Authorization: Bearer {{token}}
 ### ------------------------------------------------------------
 ### 9. 订单分页
 ### ------------------------------------------------------------
-GET {{host}}/api/orders/page?merchantId={{merchantId}}&pageNum=1&pageSize=10
+GET {{host}}/api/orders/page?pageNum=1&pageSize=10
 Authorization: Bearer {{token}}
 
 

@@ -103,7 +103,7 @@ D:\tools\ijhttp\ijhttp.bat mall-api.http
 
 要用 VS Code，需要把脚本块删掉，改成手工填变量：
 
-1. 执行登录请求，从响应里复制 `data.token` 和 `data.id`，填到文件顶部的 `@token`、`@merchantId`；
+1. 执行登录请求，从响应里复制 `data.token`，填到文件顶部的 `@token`；
 2. 执行新增分类，复制 `data.id` 填到 `@categoryId`；
 3. 执行商品分页，找一个商品的 `id` 填到 `@productId`；
 4. 执行下单，复制 `data.id` 填到 `@orderId`；
@@ -129,14 +129,14 @@ D:\tools\ijhttp\ijhttp.bat mall-api.http
    - 12 个商品，带库存，可直接用来下单。
 3. **数据库密码**：设置环境变量 `DB_PASSWORD`（见根 README 的「快速开始」）。
 4. **启动应用**：运行 `MallApplication`，确认 `http://localhost:8080` 已监听。
-5. **确认 token 机制**：`/api/**` 下除注册、登录、支付回调外都要 JWT；脚本第 2 步登录的响应脚本会把 token 写入全局变量，后续请求的 `Authorization: Bearer {{token}}` 自动生效。
+5. **确认 token 机制**：`/api/**` 下除注册、登录、支付回调外都要 JWT；脚本第 2 步登录的响应脚本会把 token 写入全局变量，后续请求的 `Authorization: Bearer {{token}}` 自动生效。商品/订单的店家身份也取自这个 token，请求里不再需要 `merchantId`。
 
 ### 两种起步方式
 
 **方式一：从零开始（脚本默认写法）**
 
 - 保持第 1 步注册 `demo_shop`（重复执行会提示「账号已存在」，正常）；
-- 第 2 步登录 `demo_shop`，自动拿到 `merchantId` 和 `token`；
+- 第 2 步登录 `demo_shop`，自动拿到 `token`；
 - 第 3 步建分类、第 4 步建商品；
 - 第 5 步分页找到刚建的「演示商品」，把它的 `id` 填到文件顶部 `@productId = ...`；
 - 继续第 6 步及以后。
@@ -149,7 +149,7 @@ D:\tools\ijhttp\ijhttp.bat mall-api.http
 - 第 3、4 步可以跳过（也可以执行，会再建一个新分类/商品）；
 - 从第 5 步继续。
 
-> 分类是全局的，不区分店家；商品和订单才归属某个店家。脚本里的 `merchantId` 会在登录后由响应脚本覆盖为当前登录店家的 id。
+> 分类是全局的，不区分店家；商品和订单才归属某个店家。登录后，商品/订单的归属完全由 token 决定；请求体或查询参数里手工传 `merchantId` 也不会生效，跨店访问会返回 403。
 
 ## 四、请求顺序与变量传递
 
@@ -158,7 +158,6 @@ D:\tools\ijhttp\ijhttp.bat mall-api.http
 ```http
 @host = http://localhost:8080
 @token =
-@merchantId = 1
 @categoryId = 1
 @productId = 1
 @orderId = 1
@@ -169,14 +168,14 @@ D:\tools\ijhttp\ijhttp.bat mall-api.http
 | 步骤 | 请求 | 依赖 | 运行后发生什么 |
 | --- | --- | --- | --- |
 | 1 | 注册 | 无 | 创建 `demo_shop`；重复执行会提示账号已存在，属正常 |
-| 2 | 登录 | 账号存在 | 响应脚本写入全局 `merchantId`、`token` |
+| 2 | 登录 | 账号存在 | 响应脚本写入全局 `token`，后续请求的身份都由它决定 |
 | 3 | 新增分类 | token | 响应脚本写入全局 `categoryId` |
-| 4 | 新增商品 | merchantId、categoryId | 创建商品，但接口返回 `Result<Void>`，**不返回商品 id** |
-| 5 | 商品分页 | token、merchantId | 找到「演示商品」的 id，**手工**填到顶部 `@productId` |
+| 4 | 新增商品 | token、categoryId | 创建商品（归属当前店家），但接口返回 `Result<Void>`，**不返回商品 id** |
+| 5 | 商品分页 | token | 找到当前店家「演示商品」的 id，**手工**填到顶部 `@productId` |
 | 6 | 商品入库 | productId、token | 库存 +50 |
-| 7 | 下单 | merchantId、productId、token | 响应脚本写入全局 `orderId` |
+| 7 | 下单 | productId、token | 响应脚本写入全局 `orderId` |
 | 8 | 订单详情 | orderId、token | 校验明细存在 |
-| 9 | 订单分页 | merchantId、token | 查看订单列表 |
+| 9 | 订单分页 | token | 只查看当前店家的订单列表 |
 | 10 | 取消订单 | orderId、token | **订单变为已取消（status=2），库存回补** |
 | 11 | 查支付状态 | orderId、token | 脚本只断言 `payStatus=0`；若刚取消，订单 status 是 2 |
 | 12 | 发起支付 | orderId、token | **只能对「待支付」订单发起**；执行过第 10 步的话，先回到第 7 步重新下一单 |
@@ -186,7 +185,7 @@ D:\tools\ijhttp\ijhttp.bat mall-api.http
 | 14 | 参数校验 | 无 | 缺 username，返回 code=400 + 「账号不能为空」 |
 | 15 | 路径不存在 | token | 返回 HTTP 404 + code=404；不带 token 会先被拦成 401 |
 
-**变量优先级**（为什么登录能覆盖顶部的默认值）：在 HTTP Client 中，同名变量的优先级为 **环境变量 > 全局变量（`client.global.set`）> 文件内 `@` 变量 > 请求级变量**。所以第 2 步脚本设置的 `merchantId` / `token` 会压过文件顶部的 `@merchantId = 1` 和空的 `@token =`。
+**变量优先级**（为什么登录能覆盖顶部的默认值）：在 HTTP Client 中，同名变量的优先级为 **环境变量 > 全局变量（`client.global.set`）> 文件内 `@` 变量 > 请求级变量**。所以第 2 步脚本设置的 `token` 会压过文件顶部的空 `@token =`。
 
 **最省事的执行顺序**：
 
@@ -196,7 +195,7 @@ D:\tools\ijhttp\ijhttp.bat mall-api.http
 
 ## 五、怎么读结果
 
-- **HTTP 状态码**：大多数业务失败仍是 HTTP 200，真正的结果看响应体 `code`；只有鉴权失败是 HTTP 401、路径不存在是 HTTP 404。
+- **HTTP 状态码**：大多数业务失败仍是 HTTP 200，真正的结果看响应体 `code`；鉴权失败是 HTTP 401，越权（操作其他店家的数据）是 HTTP 403，路径不存在是 HTTP 404。
 - **统一返回结构**：`{ "code": 0, "message": "success", "data": ... }`；`code != 0` 表示业务失败。
 - **Tests 面板**：`client.test(...)` 会显示通过/失败；失败时看 `client.assert` 的 message。它不是 JUnit 报告，只是脚本内的轻量断言。
 - **变量**：可以在响应脚本里用 `client.log(...)` 打印，或在后续请求里引用 `{{token}}` 等。

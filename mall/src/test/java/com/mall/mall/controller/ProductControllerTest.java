@@ -33,26 +33,29 @@ class ProductControllerTest extends BaseIntegrationTest {
         perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"merchantId":%d,"categoryId":%d,"name":"iPhone 15",
+                                {"categoryId":%d,"name":"iPhone 15",
                                  "price":4999.00,"stock":50}
-                                """.formatted(merchant.getId(), category.getId())))
+                                """.formatted(category.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
 
         Product saved = productMapper.selectList(null).get(0);
         assertEquals("iPhone 15", saved.getName());
+        assertEquals(merchant.getId(), saved.getMerchantId(), "商品归属应来自 JWT 中的店家");
         assertEquals(1, saved.getStatus(), "新增商品默认上架");
     }
 
     @Test
-    @DisplayName("P-2 店家不存在：被拦截，不写库")
+    @DisplayName("P-2 令牌对应店家不存在：被拦截，不写库")
     void 店家不存在() throws Exception {
         Category category = newCategory("数码电子");
+        // 模拟一个签名有效、但店家已被删除的令牌
+        token = jwtUtil.generate(999999L, "ghost");
 
         perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"merchantId":999999,"categoryId":%d,"name":"iPhone 15",
+                                {"categoryId":%d,"name":"iPhone 15",
                                  "price":4999.00,"stock":50}
                                 """.formatted(category.getId())))
                 .andExpect(jsonPath("$.code").value(500))
@@ -69,9 +72,9 @@ class ProductControllerTest extends BaseIntegrationTest {
         perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"merchantId":%d,"categoryId":999999,"name":"iPhone 15",
+                                {"categoryId":999999,"name":"iPhone 15",
                                  "price":4999.00,"stock":50}
-                                """.formatted(merchant.getId())))
+                                """))
                 .andExpect(jsonPath("$.code").value(500))
                 .andExpect(jsonPath("$.message").value("分类不存在"));
 
@@ -100,7 +103,7 @@ class ProductControllerTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("P-6 分页按店家过滤：不返回其他店家的商品")
+    @DisplayName("P-6 分页只返回当前店家的商品，传别人的 merchantId 也不生效")
     void 分页按店家过滤() throws Exception {
         Merchant shopA = newMerchant("shop_a", "测试店铺A", "123456");
         Merchant shopB = newMerchant("shop_b", "测试店铺B", "123456");
@@ -108,10 +111,11 @@ class ProductControllerTest extends BaseIntegrationTest {
         newProduct(shopA.getId(), category.getId(), "iPhone 15", "4999.00", 50);
         newProduct(shopB.getId(), category.getId(), "小米 14", "4299.00", 40);
 
+        // 当前令牌属于 shopB；故意传 shopA 的 merchantId，服务端应忽略它
         perform(get("/api/products/page").param("merchantId", String.valueOf(shopA.getId())))
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.total").value(1))
-                .andExpect(jsonPath("$.data.records[0].name").value("iPhone 15"));
+                .andExpect(jsonPath("$.data.records[0].name").value("小米 14"));
     }
 
     @Test
@@ -180,9 +184,9 @@ class ProductControllerTest extends BaseIntegrationTest {
         perform(put("/api/products/{id}", product.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"merchantId":%d,"categoryId":%d,"name":"iPhone 15 Pro",
+                                {"categoryId":%d,"name":"iPhone 15 Pro",
                                  "price":5999.00,"stock":30}
-                                """.formatted(merchant.getId(), category.getId())))
+                                """.formatted(category.getId())))
                 .andExpect(jsonPath("$.code").value(0));
 
         Product updated = productMapper.selectById(product.getId());
@@ -253,9 +257,9 @@ class ProductControllerTest extends BaseIntegrationTest {
         perform(put("/api/products/{id}", product.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"merchantId":%d,"categoryId":%d,"name":"iPhone 15 Pro",
+                                {"categoryId":%d,"name":"iPhone 15 Pro",
                                  "price":5999.00,"stock":30}
-                                """.formatted(merchant.getId(), category.getId())))
+                                """.formatted(category.getId())))
                 .andExpect(jsonPath("$.code").value(0));
 
         assertFalse(Boolean.TRUE.equals(stringRedisTemplate.hasKey(key)), "修改商品后应删除缓存");

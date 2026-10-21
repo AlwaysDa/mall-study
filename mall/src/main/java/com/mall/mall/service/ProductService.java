@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mall.mall.common.BusinessException;
+import com.mall.mall.common.ForbiddenException;
 import com.mall.mall.dto.ProductCreateDTO;
 import com.mall.mall.dto.ProductQueryDTO;
 import com.mall.mall.entity.Category;
@@ -62,9 +63,14 @@ public class ProductService extends ServiceImpl<ProductMapper, Product> {
         this.objectMapper = objectMapper;
     }
 
-    // 新增商品：校验店家与分类存在
-    public void createProduct(ProductCreateDTO dto) {
-        if (merchantService.getById(dto.getMerchantId()) == null) {
+    /**
+     * 新增商品。
+     *
+     * @param merchantId 当前登录店家 id，来自 JWT，而不是请求体
+     * @param dto        商品信息
+     */
+    public void createProduct(Long merchantId, ProductCreateDTO dto) {
+        if (merchantService.getById(merchantId) == null) {
             throw new BusinessException("店家不存在");
         }
         if (categoryService.getById(dto.getCategoryId()) == null) {
@@ -72,6 +78,8 @@ public class ProductService extends ServiceImpl<ProductMapper, Product> {
         }
         Product product = new Product();
         BeanUtils.copyProperties(dto, product);
+        // 归属强制取自令牌，客户端即使构造 merchantId 字段也无法把商品挂到别人名下
+        product.setMerchantId(merchantId);
         product.setStatus(1);   // 默认上架
         this.save(product);
     }
@@ -79,22 +87,27 @@ public class ProductService extends ServiceImpl<ProductMapper, Product> {
     /**
      * 查询商品详情（Cache-Aside）。
      *
+     * <p>先按商品 id 读缓存/数据库，再校验商品归属：只有商品所属店家才能看到详情。
+     * 缓存仍然按商品 id 共享，权限判断在返回数据之前完成。</p>
+     *
      * <p>处理顺序：</p>
      * <ol>
-     *   <li>先读 Redis：命中空值占位直接判定不存在，命中 JSON 则反序列化返回；</li>
+     *   <li>先读 Redis：命中空值占位直接判定不存在；命中 JSON 则反序列化并校验归属；</li>
      *   <li>缓存未命中或内容损坏：回源数据库；</li>
      *   <li>数据库不存在：写入短 TTL 的空值占位，再抛业务异常；</li>
-     *   <li>数据库存在：转成 {@link ProductVO} 写入缓存后返回。</li>
+     *   <li>数据库存在且属于当前店家：转成 {@link ProductVO} 写入缓存后返回。</li>
      * </ol>
      *
      * <p>注意：缓存读异常不在这里捕获。Redis 不可用时接口会直接报错，
      * 便于本地开发及时发现环境问题；生产环境可按需增加降级回源。</p>
      *
-     * @param id 商品 id
+     * @param id         商品 id
+     * @param merchantId 当前登录店家 id（来自 JWT）
      * @return 商品详情（含分类名 categoryName）
-     * @throws BusinessException 商品不存在时抛出
+     * @throws BusinessException  商品不存在时抛出
+     * @throws ForbiddenException 商品属于其他店家时抛出
      */
-    public ProductVO getProduct(Long id) {
+    public ProductVO getProduct(Long id, Long merchantId) {
         String key = PRODUCT_KEY_PREFIX + id;
 
         // 1. 先查缓存，避免每次详情请求都访问数据库
@@ -104,11 +117,21 @@ public class ProductService extends ServiceImpl<ProductMapper, Product> {
                 // 之前查过且数据库没有这个商品，直接按“不存在”处理，不再打库
                 throw new BusinessException("商品不存在");
             }
+            ProductVO cachedVo = null;
             try {
-                return objectMapper.readValue(cached, ProductVO.class);
+                cachedVo = objectMapper.readValue(cached, ProductVO.class);
             } catch (Exception e) {
                 // 缓存内容损坏（例如字段结构变更）：删掉后按未命中处理，避免坏数据一直卡住接口
                 redisTemplate.delete(key);
+            }
+            if (cachedVo != null) {
+                if (cachedVo.getMerchantId() == null) {
+                    // 旧缓存没有归属字段：删掉重建，避免把旧数据误判成“无权访问”
+                    redisTemplate.delete(key);
+                } else {
+                    requireProductOwner(cachedVo.getMerchantId(), merchantId);
+                    return cachedVo;
+                }
             }
         }
 
@@ -119,6 +142,8 @@ public class ProductService extends ServiceImpl<ProductMapper, Product> {
             redisTemplate.opsForValue().set(key, NULL_VALUE, NULL_TTL);
             throw new BusinessException("商品不存在");
         }
+        // 3.5 商品存在，但可能属于别的店家：先做授权判断，再决定是否返回和缓存
+        requireProductOwner(product.getMerchantId(), merchantId);
 
         ProductVO vo = toVO(product);
         // 4. 回写缓存。TTL 加 0~5 分钟随机抖动，避免一批商品缓存同时过期（缓存雪崩）
@@ -138,9 +163,12 @@ public class ProductService extends ServiceImpl<ProductMapper, Product> {
      * <p>先删数据库再删缓存：即使删缓存失败，旧缓存最多存活到 TTL 到期，
      * 不会重新出现一个已经被删除的商品。</p>
      *
-     * @param id 商品 id
+     * @param id         商品 id
+     * @param merchantId 当前登录店家 id（来自 JWT）
+     * @throws ForbiddenException 商品属于其他店家时抛出
      */
-    public void deleteProduct(Long id) {
+    public void deleteProduct(Long id, Long merchantId) {
+        requireOwnedProduct(id, merchantId);
         this.removeById(id);
         evictProductCache(id);
     }
@@ -151,35 +179,40 @@ public class ProductService extends ServiceImpl<ProductMapper, Product> {
      * <p>缓存里存的是完整 {@link ProductVO}，名称、价格、分类、库存等任一字段变化，
      * 旧缓存都会失真，因此更新后直接删除，而不是尝试更新缓存。</p>
      *
-     * @param id 商品 id
-     * @param dto 新的商品字段
-     * @throws BusinessException 商品、店家或分类不存在时抛出
+     * @param id         商品 id
+     * @param merchantId 当前登录店家 id（来自 JWT）
+     * @param dto        新的商品字段
+     * @throws BusinessException  商品或分类不存在时抛出
+     * @throws ForbiddenException 商品属于其他店家时抛出
      */
-    public void updateProduct(Long id, ProductCreateDTO dto) {
-        if (this.getById(id) == null) {
-            throw new BusinessException("商品不存在");
-        }
-        if (merchantService.getById(dto.getMerchantId()) == null) {
-            throw new BusinessException("店家不存在");
-        }
+    public void updateProduct(Long id, Long merchantId, ProductCreateDTO dto) {
+        requireOwnedProduct(id, merchantId);
         if (categoryService.getById(dto.getCategoryId()) == null) {
             throw new BusinessException("分类不存在");
         }
         Product product = new Product();
         BeanUtils.copyProperties(dto, product);
         product.setId(id);      // 用路径参数指定的 id
+        // 商品归属不允许通过修改接口变更，始终保留原店家
+        product.setMerchantId(null);
         // status 为 null，updateById 默认只更新非 null 字段，所以上架状态不会被覆盖
         this.updateById(product);
         // 数据库更新成功后删除旧缓存，下一次查询会按新数据重建
         evictProductCache(id);
     }
 
-    // 分页 + 多条件查询
-    public Page<ProductVO> page(ProductQueryDTO query) {
+    /**
+     * 分页 + 多条件查询。
+     *
+     * <p>店家条件永远取自当前登录身份，忽略前端可能传入的 merchantId，
+     * 从根源上避免翻页接口被用来遍历其他店家的商品。</p>
+     *
+     * @param query      分类、状态、关键字等筛选条件
+     * @param merchantId 当前登录店家 id（来自 JWT）
+     */
+    public Page<ProductVO> page(ProductQueryDTO query, Long merchantId) {
         QueryWrapper<Product> wrapper = new QueryWrapper<>();
-        if (query.getMerchantId() != null) {
-            wrapper.eq("merchant_id", query.getMerchantId());
-        }
+        wrapper.eq("merchant_id", merchantId);
         if (query.getCategoryId() != null) {
             wrapper.eq("category_id", query.getCategoryId());
         }
@@ -200,29 +233,54 @@ public class ProductService extends ServiceImpl<ProductMapper, Product> {
         return voPage;
     }
 
-    /** 上架/下架，并清理商品详情缓存（status 会出现在 {@link ProductVO} 中）。 */
-    public void changeStatus(Long id, Integer status) {
-        Product product = this.getById(id);
-        if (product == null) {
-            throw new BusinessException("商品不存在");
-        }
+    /**
+     * 上架/下架，并清理商品详情缓存（status 会出现在 {@link ProductVO} 中）。
+     *
+     * @throws ForbiddenException 商品属于其他店家时抛出
+     */
+    public void changeStatus(Long id, Long merchantId, Integer status) {
+        Product product = requireOwnedProduct(id, merchantId);
         product.setStatus(status);
         this.updateById(product);
         evictProductCache(id);
     }
 
-    /** 库存入库，并清理商品详情缓存（stock 会出现在 {@link ProductVO} 中）。 */
-    public void stockIn(Long id, Integer quantity) {
+    /**
+     * 库存入库，并清理商品详情缓存（stock 会出现在 {@link ProductVO} 中）。
+     *
+     * @throws ForbiddenException 商品属于其他店家时抛出
+     */
+    public void stockIn(Long id, Long merchantId, Integer quantity) {
         if (quantity == null || quantity <= 0) {
             throw new BusinessException("入库数量必须大于0");
         }
+        Product product = requireOwnedProduct(id, merchantId);
+        product.setStock(product.getStock() + quantity);
+        this.updateById(product);
+        evictProductCache(id);
+    }
+
+    /**
+     * 按 id 取商品，并确认它属于当前登录店家。
+     *
+     * @return 已确认归属的商品
+     * @throws BusinessException  商品不存在时抛出
+     * @throws ForbiddenException 商品属于其他店家时抛出
+     */
+    private Product requireOwnedProduct(Long id, Long merchantId) {
         Product product = this.getById(id);
         if (product == null) {
             throw new BusinessException("商品不存在");
         }
-        product.setStock(product.getStock() + quantity);
-        this.updateById(product);
-        evictProductCache(id);
+        requireProductOwner(product.getMerchantId(), merchantId);
+        return product;
+    }
+
+    /** 统一处理“商品是否存在”之外的归属判断，避免每个入口重复写比较逻辑。 */
+    private void requireProductOwner(Long ownerMerchantId, Long currentMerchantId) {
+        if (!currentMerchantId.equals(ownerMerchantId)) {
+            throw new ForbiddenException("无权操作该商品");
+        }
     }
 
     /**

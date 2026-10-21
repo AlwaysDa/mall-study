@@ -19,8 +19,7 @@ import java.util.List;
 @Data
 public class OrderCreateDTO {
 
-    @NotNull(message = "店家ID不能为空")
-    private Long merchantId;
+    // 店家身份不再从请求体读取：由 JWT 解析后从 request attribute 传入，避免替别人下单
 
     @NotBlank(message = "买家姓名不能为空")
     private String buyerName;

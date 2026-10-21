@@ -63,7 +63,7 @@ mall-study/
     │   ├── util/                      # JwtUtil 等工具类
     │   └── vo/                        # 出参对象
     ├── src/main/resources/application.yml
-    ├── src/test/                      # 自动化测试（72 条）
+    ├── src/test/                      # 自动化测试（77 条）
     ├── mvnw / mvnw.cmd                # Maven Wrapper
     └── pom.xml
 ```
@@ -170,7 +170,7 @@ JWT 密钥默认可直接跑，生产环境请用环境变量 `JWT_SECRET` 覆�
 
 ## 运行测试
 
-测试共 72 条：68 条接口集成测试（覆盖店家、分类、商品、订单、支付、鉴权、接口文档七个模块）、3 条纯单元测试，外加 1 条上下文加载测试。主力是集成测试，用 `@SpringBootTest` + MockMvc 打真实 MySQL。
+测试共 77 条：73 条接口集成测试（覆盖店家、分类、商品、订单、支付、鉴权、越权控制、接口文档八个模块）、3 条纯单元测试，外加 1 条上下文加载测试。主力是集成测试，用 `@SpringBootTest` + MockMvc 打真实 MySQL。
 
 跑测试前先执行 `05-测试库初始化.sql` 建好 `mall_test` 库，测试只清空这个库，不会动开发库 `mall`。
 
@@ -210,9 +210,9 @@ mvn test "-Dtest=OrderControllerTest#下单成功"
 - [x] 阶段五 · 货物管理模块
 - [x] 阶段六 · 订单管理模块
 - [x] 阶段七 · 模拟支付
-- [ ] 阶段八 · 进阶与工程化（进行中：参数校验统一处理、自动化测试、**JWT 登录鉴权**、**Redis 商品详情缓存**、**Swagger 接口文档**已完成；待做打包部署）
+- [ ] 阶段八 · 进阶与工程化（进行中：参数校验统一处理、自动化测试、**JWT 登录鉴权**、**越权控制**、**Redis 商品详情缓存**、**Swagger 接口文档**已完成；待做打包部署）
 
-自动化测试 72 条全绿（`mvn test`，跑在独立测试库 `mall_test`）。
+自动化测试 77 条全绿（`mvn test`，跑在独立测试库 `mall_test`）。
 
 ## 说明
 
@@ -221,3 +221,4 @@ mvn test "-Dtest=OrderControllerTest#下单成功"
 - 金额字段一律使用 `BigDecimal`，与数据库的 `DECIMAL` 类型对齐。
 - 开发库 `mall` 与测试库 `mall_test` 相互隔离，测试不会污染手工准备的数据。
 - `/api/**` 接口除「注册、登录、支付回调」外均需登录：先调登录接口拿 JWT，后续请求带上 `Authorization: Bearer <token>`，否则返回 401。
+- 商品和订单自动按 token 中的店家身份隔离：创建时归属取自 token，查询/修改/删除只允许操作自己的数据，跨店访问返回 403。请求体或查询参数里的 `merchantId` 不再生效。

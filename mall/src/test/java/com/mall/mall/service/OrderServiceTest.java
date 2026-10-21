@@ -62,7 +62,6 @@ class OrderServiceTest {
 
     private OrderCreateDTO dtoWith(Long productId, int quantity) {
         OrderCreateDTO dto = new OrderCreateDTO();
-        dto.setMerchantId(1L);
         dto.setBuyerName("张三");
         OrderCreateDTO.OrderItemDTO item = new OrderCreateDTO.OrderItemDTO();
         item.setProductId(productId);
@@ -74,6 +73,7 @@ class OrderServiceTest {
     private Product product(Long id, String name, String price, int stock) {
         Product product = new Product();
         product.setId(id);
+        product.setMerchantId(1L);
         product.setName(name);
         product.setPrice(new BigDecimal(price));
         product.setStock(stock);
@@ -86,7 +86,7 @@ class OrderServiceTest {
         when(merchantService.getById(1L)).thenReturn(null);
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> orderService.createOrder(dtoWith(1L, 1)));
+                () -> orderService.createOrder(1L, dtoWith(1L, 1)));
         assertTrue(exception.getMessage().contains("店家不存在"));
 
         verify(orderItemMapper, never()).insert(any(OrderItem.class));
@@ -100,7 +100,7 @@ class OrderServiceTest {
         when(productService.getById(999L)).thenReturn(null);
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> orderService.createOrder(dtoWith(999L, 1)));
+                () -> orderService.createOrder(1L, dtoWith(999L, 1)));
         assertTrue(exception.getMessage().contains("商品不存在"));
 
         verify(orderItemMapper, never()).insert(any(OrderItem.class));
@@ -114,7 +114,7 @@ class OrderServiceTest {
         when(productService.getById(1L)).thenReturn(product(1L, "iPhone 15", "4999.00", 1));
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> orderService.createOrder(dtoWith(1L, 5)));
+                () -> orderService.createOrder(1L, dtoWith(1L, 5)));
         assertTrue(exception.getMessage().contains("库存不足"));
 
         verify(productMapper, never()).deductStock(anyLong(), anyInt());

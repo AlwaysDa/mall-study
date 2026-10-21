@@ -3,6 +3,7 @@ package com.mall.mall.controller;
 import com.mall.mall.common.Result;
 import com.mall.mall.config.OpenApiConfig;
 import com.mall.mall.dto.PayCallbackDTO;
+import com.mall.mall.interceptor.AuthInterceptor;
 import com.mall.mall.service.PayService;
 import com.mall.mall.vo.PayResultVO;
 import com.mall.mall.vo.PayStatusVO;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,11 +37,12 @@ public class PayController {
         this.payService = payService;
     }
 
-    @Operation(summary = "发起支付", description = "返回模拟支付单号和收银台链接，并把订单置为支付中")
+    @Operation(summary = "发起支付", description = "返回模拟支付单号和收银台链接；只能操作自己的订单")
     @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME)
     @PostMapping("/{orderId}")
-    public Result<PayResultVO> createPay(@PathVariable Long orderId) {
-        return Result.success(payService.createPay(orderId));
+    public Result<PayResultVO> createPay(@PathVariable Long orderId,
+                                        @RequestAttribute(AuthInterceptor.ATTR_MERCHANT_ID) Long merchantId) {
+        return Result.success(payService.createPay(orderId, merchantId));
     }
 
     @Operation(summary = "支付回调", description = "第三方支付平台的回调，公开接口，无需 token")
@@ -49,10 +52,11 @@ public class PayController {
         return Result.success();
     }
 
-    @Operation(summary = "查询支付状态")
+    @Operation(summary = "查询支付状态", description = "只能查看自己店家的订单")
     @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME)
     @GetMapping("/{orderId}/status")
-    public Result<PayStatusVO> status(@PathVariable Long orderId) {
-        return Result.success(payService.getPayStatus(orderId));
+    public Result<PayStatusVO> status(@PathVariable Long orderId,
+                                      @RequestAttribute(AuthInterceptor.ATTR_MERCHANT_ID) Long merchantId) {
+        return Result.success(payService.getPayStatus(orderId, merchantId));
     }
 }

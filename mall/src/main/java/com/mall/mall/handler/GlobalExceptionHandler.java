@@ -1,6 +1,7 @@
 package com.mall.mall.handler;
 
 import com.mall.mall.common.BusinessException;
+import com.mall.mall.common.ForbiddenException;
 import com.mall.mall.common.Result;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -17,6 +18,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public Result<Void> handleBusinessException(BusinessException e) {
         return Result.fail(e.getCode(), e.getMessage());
+    }
+
+    // 授权失败：已登录，但操作的是其他店家的数据
+    // 和鉴权失败一样使用标准 HTTP 状态码，而不是 HTTP 200 + code
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<Result<Void>> handleForbiddenException(ForbiddenException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Result.fail(e.getCode(), e.getMessage()));
     }
 
     // 参数校验失败（DTO 上的 @Valid + @NotBlank/@NotNull/@Size 等）
