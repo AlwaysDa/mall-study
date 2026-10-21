@@ -52,7 +52,7 @@ mall-study/
     ├── src/main/java/com/mall/mall/
     │   ├── MallApplication.java       # 启动类
     │   ├── common/                    # Result 统一返回、ErrorCode、BusinessException
-    │   ├── config/                    # MyBatis-Plus、自动填充、密码加密等配置
+    │   ├── config/                    # MyBatis-Plus、Web 拦截器、Swagger 文档等配置
     │   ├── controller/                # 接口层（店家 / 分类 / 商品 / 订单 / 支付）
     │   ├── dto/                       # 入参对象（含校验注解）
     │   ├── entity/                    # 数据库实体
@@ -63,7 +63,7 @@ mall-study/
     │   ├── util/                      # JwtUtil 等工具类
     │   └── vo/                        # 出参对象
     ├── src/main/resources/application.yml
-    ├── src/test/                      # 自动化测试（70 条）
+    ├── src/test/                      # 自动化测试（72 条）
     ├── mvnw / mvnw.cmd                # Maven Wrapper
     └── pom.xml
 ```
@@ -152,7 +152,15 @@ JWT 密钥默认可直接跑，生产环境请用环境变量 `JWT_SECRET` 覆�
 
 商品详情已接入 Redis 缓存，启动前请确保 Memurai / Redis 在 `6379` 端口运行；Redis 不可用时商品详情接口会报连接错误，其他接口不受影响。
 
-### 5. 手工回归接口（可选）
+### 5. 接口文档（Swagger UI）
+
+启动后访问 `http://localhost:8080/swagger-ui.html`（会自动跳转到 Swagger UI 页面）。接口按模块分组，点开任意接口即可查看参数和响应结构。
+
+除注册、登录和支付回调外，`/api/**` 接口都需要 JWT：先调用登录接口拿到 `data.token`，再点页面右上角的 **Authorize**，把 token 填进去（不用手写 `Bearer ` 前缀），之后就能直接在页面上调试受保护接口。
+
+原始 OpenAPI 描述可通过 `http://localhost:8080/v3/api-docs` 获取。
+
+### 6. 手工回归接口（可选）
 
 仓库里带了一份纯文本接口脚本 [`mall/http/mall-api.http`](./mall/http/mall-api.http)，覆盖注册登录、商品、订单、支付的主链路。
 
@@ -162,7 +170,7 @@ JWT 密钥默认可直接跑，生产环境请用环境变量 `JWT_SECRET` 覆�
 
 ## 运行测试
 
-测试共 70 条：66 条接口集成测试（覆盖店家、分类、商品、订单、支付、鉴权六个模块）、3 条纯单元测试，外加 1 条上下文加载测试。主力是集成测试，用 `@SpringBootTest` + MockMvc 打真实 MySQL。
+测试共 72 条：68 条接口集成测试（覆盖店家、分类、商品、订单、支付、鉴权、接口文档七个模块）、3 条纯单元测试，外加 1 条上下文加载测试。主力是集成测试，用 `@SpringBootTest` + MockMvc 打真实 MySQL。
 
 跑测试前先执行 `05-测试库初始化.sql` 建好 `mall_test` 库，测试只清空这个库，不会动开发库 `mall`。
 
@@ -202,9 +210,9 @@ mvn test "-Dtest=OrderControllerTest#下单成功"
 - [x] 阶段五 · 货物管理模块
 - [x] 阶段六 · 订单管理模块
 - [x] 阶段七 · 模拟支付
-- [ ] 阶段八 · 进阶与工程化（进行中：参数校验统一处理、自动化测试、**JWT 登录鉴权**、**Redis 商品详情缓存**已完成；待做 Swagger、打包部署）
+- [ ] 阶段八 · 进阶与工程化（进行中：参数校验统一处理、自动化测试、**JWT 登录鉴权**、**Redis 商品详情缓存**、**Swagger 接口文档**已完成；待做打包部署）
 
-自动化测试 70 条全绿（`mvn test`，跑在独立测试库 `mall_test`）。
+自动化测试 72 条全绿（`mvn test`，跑在独立测试库 `mall_test`）。
 
 ## 说明
 

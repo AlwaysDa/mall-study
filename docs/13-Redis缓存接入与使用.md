@@ -512,7 +512,7 @@ netstat -ano | findstr :6379
 6. 可选：补 Redis 异常时的降级，保证 Redis 挂掉时还能回源数据库；
 7. 跑一遍商品相关测试，确认原有功能没有被缓存改坏。
 
-> 本项目进度：依赖、连接配置、商品缓存读取与各类失效点已落地；实现位置是 `ProductService`（缓存读取与商品写操作失效）、`OrderService`（下单/取消后的库存失效）、`CategoryService`（分类改名后的失效）。自动化用例 P-15 ~ P-18 已覆盖读写与失效，`mvn test` 共 70 条全绿。Redis 异常降级（第 6 步）暂未实现；集成测试需要在本地启动 Memurai / Redis 并配置 `DB_PASSWORD` 后执行。
+> 本项目进度：依赖、连接配置、商品缓存读取与各类失效点已落地；实现位置是 `ProductService`（缓存读取与商品写操作失效）、`OrderService`（下单/取消后的库存失效）、`CategoryService`（分类改名后的失效）。自动化用例 P-15 ~ P-18 已覆盖读写与失效，`mvn test` 共 72 条全绿。Redis 异常降级（第 6 步）暂未实现；集成测试需要在本地启动 Memurai / Redis 并配置 `DB_PASSWORD` 后执行。
 
 完成后的自检：
 
