@@ -12,6 +12,7 @@
 | 框架 | Spring Boot | 4.1.1 |
 | 持久层 | MyBatis-Plus | 3.5.15（boot4 starter + jsqlparser） |
 | 登录鉴权 | JJWT（JWT 令牌） | 0.12.5 |
+| 缓存 | Redis（Windows 可用 Memurai） | 商品详情缓存 |
 | 数据库 | MySQL | 8.4 LTS |
 | 密码加密 | Spring Security Crypto | BCrypt |
 | 测试 | JUnit 5 + Mockito + MockMvc | 随 Spring Boot 4 |
@@ -62,7 +63,7 @@ mall-study/
     │   ├── util/                      # JwtUtil 等工具类
     │   └── vo/                        # 出参对象
     ├── src/main/resources/application.yml
-    ├── src/test/                      # 自动化测试（66 条）
+    ├── src/test/                      # 自动化测试（70 条）
     ├── mvnw / mvnw.cmd                # Maven Wrapper
     └── pom.xml
 ```
@@ -83,7 +84,7 @@ mall-study/
 
 ### 1. 环境要求
 
-JDK 21、MySQL 8.4；Maven 3.9+ 可以不装，工程自带 Wrapper。
+JDK 21、MySQL 8.4、Redis（Windows 可用 Memurai）；Maven 3.9+ 可以不装，工程自带 Wrapper。
 
 ### 2. 初始化数据库
 
@@ -149,6 +150,8 @@ POST /api/merchants/login
 
 JWT 密钥默认可直接跑，生产环境请用环境变量 `JWT_SECRET` 覆盖（长度需 ≥ 32 字符）。
 
+商品详情已接入 Redis 缓存，启动前请确保 Memurai / Redis 在 `6379` 端口运行；Redis 不可用时商品详情接口会报连接错误，其他接口不受影响。
+
 ### 5. 手工回归接口（可选）
 
 仓库里带了一份纯文本接口脚本 [`mall/http/mall-api.http`](./mall/http/mall-api.http)，覆盖注册登录、商品、订单、支付的主链路。
@@ -159,9 +162,11 @@ JWT 密钥默认可直接跑，生产环境请用环境变量 `JWT_SECRET` 覆�
 
 ## 运行测试
 
-测试共 66 条：62 条接口集成测试（覆盖店家、分类、商品、订单、支付、鉴权六个模块）、3 条纯单元测试，外加 1 条上下文加载测试。主力是集成测试，用 `@SpringBootTest` + MockMvc 打真实 MySQL。
+测试共 70 条：66 条接口集成测试（覆盖店家、分类、商品、订单、支付、鉴权六个模块）、3 条纯单元测试，外加 1 条上下文加载测试。主力是集成测试，用 `@SpringBootTest` + MockMvc 打真实 MySQL。
 
 跑测试前先执行 `05-测试库初始化.sql` 建好 `mall_test` 库，测试只清空这个库，不会动开发库 `mall`。
+
+商品详情缓存测试还会访问 Redis：请先启动本地 Memurai / Redis。测试使用 Redis `database 1`，并在每个用例前清理 `mall:product:*`，不会影响开发用的 `database 0`。
 
 ```powershell
 cd mall
@@ -197,9 +202,9 @@ mvn test "-Dtest=OrderControllerTest#下单成功"
 - [x] 阶段五 · 货物管理模块
 - [x] 阶段六 · 订单管理模块
 - [x] 阶段七 · 模拟支付
-- [ ] 阶段八 · 进阶与工程化（进行中：参数校验统一处理、自动化测试、**JWT 登录鉴权**已完成；待做 Redis 缓存、Swagger、打包部署）
+- [ ] 阶段八 · 进阶与工程化（进行中：参数校验统一处理、自动化测试、**JWT 登录鉴权**、**Redis 商品详情缓存**已完成；待做 Swagger、打包部署）
 
-自动化测试 66 条全绿（`mvn test`，跑在独立测试库 `mall_test`）。
+自动化测试 70 条全绿（`mvn test`，跑在独立测试库 `mall_test`）。
 
 ## 说明
 

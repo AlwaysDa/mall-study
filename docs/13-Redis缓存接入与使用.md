@@ -324,15 +324,18 @@ private void evictProductCache(Long id) {
 | `updateProduct` | 名称、价格、描述、分类等字段都可能变化 |
 | `changeStatus` | 上架/下架状态在 `ProductVO` 里 |
 | `stockIn` | 库存也在 `ProductVO` 里 |
-| 删除商品 | 商品不存在后，缓存不能继续返回旧数据；删除接口目前直接调 `removeById`，接缓存时要补上失效逻辑 |
-| 修改分类名 | `ProductVO.categoryName` 来自分类表，分类改名后商品缓存也会变旧；要么不缓存分类名，要么在分类更新时清掉相关商品缓存 |
+| 删除商品 | 商品不存在后，缓存不能继续返回旧数据；`deleteProduct` 删除数据库记录后清理缓存 |
+| 修改分类名 | `ProductVO.categoryName` 来自分类表，分类改名后商品缓存也会变旧；`updateCategory` 会清掉该分类下所有商品缓存 |
+| 下单 / 取消订单 | 扣减或回补库存后，商品缓存里的 `stock` 会变旧；`OrderService` 在事务提交后统一清理受影响商品的缓存 |
 
 为什么是「删除」而不是「更新缓存」：
 
 - 更新缓存需要处理并发写的顺序，容易把旧值写回去；
 - 删除更简单，下一次读自然重建；代价是下一次读会多一次数据库查询。
 
-> 如果更新方法带 `@Transactional`，更稳妥的做法是**事务提交后再删缓存**。在事务里删缓存，可能出现「缓存已删、事务还没提交，另一个请求读到旧数据库值又写回缓存」的竞态；如果是在事务里写缓存，事务回滚后还会留下与数据库不一致的值。学习阶段先记住原则，等真正用事务时再处理提交时机。
+> 如果更新方法带 `@Transactional`，更稳妥的做法是**事务提交后再删缓存**。在事务里删缓存，可能出现「缓存已删、事务还没提交，另一个请求读到旧数据库值又写回缓存」的竞态；如果是在事务里写缓存，事务回滚后还会留下与数据库不一致的值。本项目的下单/取消订单就属于这种情况：`OrderService` 收集受影响的商品 id，通过 `ProductService.evictProductCachesAfterCommit` 注册 `TransactionSynchronization.afterCommit()`，事务提交成功后才删缓存。
+
+> 缓存删除属于「尽力而为」：删除失败只吞掉异常，不回滚数据库。数据库已是新值，最坏情况是旧缓存多存活到 TTL 到期。
 
 ### 4. 验证缓存是否生效
 
@@ -435,6 +438,7 @@ memurai-cli ttl mall:product:999999 # 约 120 秒
 | 现象 | 常见原因 | 处理 |
 | --- | --- | --- |
 | `Connection refused` | Memurai 服务没启动、端口不对、Docker 没映射端口 | 先 `memurai-cli ping`（Docker 用 `docker exec -it mall-redis redis-cli ping`），再检查 host/port |
+| `Start-Service` 报 `Cannot start service` / 系统找不到指定的文件 | Windows 服务注册项被清理（常见于安全软件误处理） | 把安装目录加入安全软件信任区，管理员运行安装包选择「修复」或重装，并勾选安装为 Windows 服务 |
 | `memurai-cli` 找不到或安装目录缺少该文件 | 360 等杀毒软件误隔离 | 从隔离区恢复，并把 Memurai 安装目录加入信任区/白名单 |
 | `NOAUTH Authentication required` | Redis 设了密码，应用没配 | 配置 `spring.data.redis.password` 或环境变量 |
 | 请求一直卡住 | Redis 连接没有超时 | 配置 `spring.data.redis.timeout`，并检查网络 |
@@ -487,12 +491,14 @@ netstat -ano | findstr :6379
 
 ### 5. 测试注意事项
 
-一旦 `getProduct` 接了 Redis，原有的商品相关测试也会走到缓存逻辑：
+商品详情接入 Redis 后，商品相关测试也会走到缓存逻辑。本项目当前的处理方式：
 
-- 本地跑 `mvn test` 前要先启动 Redis，否则测试会因连接失败而挂；
-- 不想让测试依赖外部 Redis，可以在测试里 mock `StringRedisTemplate`，或使用单独的测试配置；
-- 测试缓存命中/失效时，用独立的 key 前缀，并在测试前后清理自己的 key，不要 `FLUSHDB` 整个库；
-- 以后可以用 Testcontainers 在测试时自动启动临时 Redis，目前学习阶段先手动启动即可。
+- 测试配置使用 Redis `database 1`，避免影响开发用的 `database 0`；
+- `BaseIntegrationTest` 在每个用例前清理 `mall:product:*`，避免缓存跨用例污染；
+- `ProductControllerTest` 的 P-15 ~ P-18 覆盖缓存写入、写后失效、空值占位和命中不回源；
+- 本地跑 `mvn test` 前要先启动 Memurai / Redis，否则测试会因连接失败而挂；
+- 当前没有对 Redis 异常做降级，Redis 停止时商品详情接口会直接报连接错误；学习阶段先保证 Redis 运行，生产环境再按第七节补降级；
+- 不希望对 Redis 有依赖时，可以在测试里 mock `StringRedisTemplate`，或使用单独的测试配置；以后也可以用 Testcontainers 自动启动临时 Redis。
 
 ## 八、接入步骤与验收
 
@@ -505,6 +511,8 @@ netstat -ano | findstr :6379
 5. 查询不存在的商品，确认出现短 TTL 的 `__NULL__`；
 6. 可选：补 Redis 异常时的降级，保证 Redis 挂掉时还能回源数据库；
 7. 跑一遍商品相关测试，确认原有功能没有被缓存改坏。
+
+> 本项目进度：依赖、连接配置、商品缓存读取与各类失效点已落地；实现位置是 `ProductService`（缓存读取与商品写操作失效）、`OrderService`（下单/取消后的库存失效）、`CategoryService`（分类改名后的失效）。自动化用例 P-15 ~ P-18 已覆盖读写与失效，`mvn test` 共 70 条全绿。Redis 异常降级（第 6 步）暂未实现；集成测试需要在本地启动 Memurai / Redis 并配置 `DB_PASSWORD` 后执行。
 
 完成后的自检：
 

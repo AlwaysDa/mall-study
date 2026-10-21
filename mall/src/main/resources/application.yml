@@ -11,6 +11,15 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      # 本地默认连接 Memurai / Redis；密码和库号都可用环境变量覆盖
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      # Redis 不可用时不要一直挂起请求
+      timeout: 3s
 
 # JWT 登录鉴权配置
 mall:

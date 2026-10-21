@@ -30,8 +30,7 @@ public class CategoryController {
 
     @PutMapping("/{id}")
     public Result<Category> update(@PathVariable Long id, @RequestBody Category category) {
-        category.setId(id);
-        categoryService.updateById(category);      // 按 id 更新
+        categoryService.updateCategory(id, category);   // 按 id 更新，并清理相关商品缓存
         return Result.success(category);
     }
 

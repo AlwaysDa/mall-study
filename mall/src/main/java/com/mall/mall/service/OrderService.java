@@ -18,8 +18,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
+/**
+ * 订单业务层。
+ *
+ * <p>下单和取消订单都会改动商品库存，因此除了用数据库事务保证订单与库存一致，
+ * 还要在事务提交后清理相关商品的详情缓存，避免缓存里的 stock 长时间是旧值。</p>
+ */
 @Service
 public class OrderService extends ServiceImpl<OrderMapper, Order> {
 
@@ -54,9 +62,14 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
 
         BigDecimal totalAmount = BigDecimal.ZERO;
         List<OrderItem> items = new ArrayList<>();
+        // 记录本次库存发生变化的商品 id：LinkedHashSet 既能去重（同一商品可能出现在多条明细里），
+        // 又能保持插入顺序，方便后续批量、稳定地删除缓存
+        Set<Long> affectedProductIds = new LinkedHashSet<>();
 
         // 1. 逐条校验商品与库存，同时构造明细快照
         for (OrderCreateDTO.OrderItemDTO itemDTO : dto.getItems()) {
+            // 这里必须直接读数据库拿实时库存，不能走 getProduct 的详情缓存：
+            // 缓存可能比数据库旧，库存判断会失真；真正的扣减还要靠下面的原子 SQL 兜底
             Product product = productService.getById(itemDTO.getProductId());
             if (product == null) {
                 throw new BusinessException("商品不存在: " + itemDTO.getProductId());
@@ -80,6 +93,8 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
             if (rows == 0) {
                 throw new BusinessException("库存不足: " + product.getName());
             }
+            // 扣减成功后登记商品 id，事务提交后再统一删缓存
+            affectedProductIds.add(product.getId());
         }
 
         // 3. 保存订单（先存订单，才能拿到自增 id 给明细用）
@@ -99,6 +114,9 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
             orderItemMapper.insert(item);
         }
 
+        // 不能在这里立即删缓存：事务还没提交，一旦后面回滚，库存其实没变。
+        // evictProductCachesAfterCommit 会把删除动作推迟到 afterCommit，提交失败则不动缓存
+        productService.evictProductCachesAfterCommit(affectedProductIds);
         return toVO(order);
     }
 
@@ -118,12 +136,17 @@ public class OrderService extends ServiceImpl<OrderMapper, Order> {
         // 回补库存
         List<OrderItem> items = orderItemMapper.selectList(
                 new QueryWrapper<OrderItem>().eq("order_id", id));
+        // 同样用 Set 去重：同一商品可能有多条明细
+        Set<Long> affectedProductIds = new LinkedHashSet<>();
         for (OrderItem item : items) {
             productMapper.addStock(item.getProductId(), item.getQuantity());
+            affectedProductIds.add(item.getProductId());
         }
 
         order.setStatus(2);   // 已取消
         this.updateById(order);
+        // 与下单同理：等事务提交成功后再删缓存，避免回滚时误删仍然有效的缓存
+        productService.evictProductCachesAfterCommit(affectedProductIds);
     }
 
     /**

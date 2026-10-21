@@ -9,12 +9,14 @@ import com.mall.mall.mapper.MerchantMapper;
 import com.mall.mall.mapper.OrderItemMapper;
 import com.mall.mall.mapper.OrderMapper;
 import com.mall.mall.mapper.ProductMapper;
+import com.mall.mall.service.ProductService;
 import com.mall.mall.util.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
@@ -23,6 +25,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 /**
  * 集成测试基类：启动完整容器 + 指向测试库 mall_test + 每个用例前清库。
@@ -76,6 +79,13 @@ public abstract class BaseIntegrationTest {
     protected OrderItemMapper orderItemMapper;
 
     /**
+     * 测试专用 Redis 客户端：application-test.yml 已把 database 固定为 1。
+     * 既用于每个用例前清缓存，也用于缓存用例里直接断言 key、value 和 TTL。
+     */
+    @Autowired
+    protected StringRedisTemplate stringRedisTemplate;
+
+    /**
      * 专职测试库，每个用例开始前清空，保证从零开始。
      * 删除顺序与外键无关（本项目没有建外键约束），先删子表更符合习惯。
      */
@@ -86,6 +96,12 @@ public abstract class BaseIntegrationTest {
         productMapper.delete(null);
         categoryMapper.delete(null);
         merchantMapper.delete(null);
+        // 清掉测试库(1)里的商品缓存，避免上一个用例的缓存影响下一个用例。
+        // 这里用 keys 只是为了测试方便；生产环境禁止 KEYS 遍历（会阻塞 Redis），应使用 SCAN。
+        Set<String> cacheKeys = stringRedisTemplate.keys(ProductService.PRODUCT_KEY_PREFIX + "*");
+        if (cacheKeys != null && !cacheKeys.isEmpty()) {
+            stringRedisTemplate.delete(cacheKeys);
+        }
         // 清库后重置令牌：默认身份是「店家 ID=1」
         this.token = jwtUtil.generate(1L, "test-merchant");
     }

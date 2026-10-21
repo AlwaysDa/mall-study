@@ -45,10 +45,10 @@ public class ProductController {
         return Result.success();
     }
 
-    // 删除商品
+    // 删除商品（Service 内部会同时清理详情缓存，Controller 不直接操作 Mapper）
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
-        productService.removeById(id);
+        productService.deleteProduct(id);
         return Result.success();
     }
 
